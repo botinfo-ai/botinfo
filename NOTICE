@@ -1,0 +1,35 @@
+Reins by BotInfo
+Copyright 2026 BotInfo.ai
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party work this product uses, describes or was informed by:
+
+  - Sesame robot, by Dorian Todd: https://github.com/dorianborian/sesame-robot (Apache License 2.0).
+    reins/backends/sesame_spec.py records facts read from the Sesame firmware source at commit d106cbc8
+    (command and face names, default settings, servo-write and delay counts). reins/backends/sesame_mock.py
+    imitates the firmware's HTTP API from that source, including BotInfo's optional motion-timeout patch.
+    No Sesame source code, firmware, CAD or documentation files are included. Reins is an independent BotInfo.ai
+    project. It is not made, endorsed or reviewed by Dorian Todd. "Sesame" is the name of his robot, not of
+    this product.
+
+  - BotInfo sesame-kit (same copyright holder, Apache License 2.0): reins/clock.py,
+    reins/backends/sesame_spec.py and reins/backends/sesame_mock.py were copied from it on 2026-10-16 and
+    adapted, as each file says at the top.
+
+  - ros-mcp-server, by Contoro Inc.: https://github.com/robotmcp/ros-mcp-server (Apache License 2.0).
+    The tool names and arguments of the reference connector in reins/backends/simrover.py follow its public
+    tool interface (v3.1.2). bindings/ros-mcp-server-turtlesim.toml calls those tools by name. No code was
+    copied.
+
+  - unitree-go2-mcp-server: https://github.com/lpigeon/unitree-go2-mcp-server (Apache License 2.0 text).
+    It was read to plan its grading (docs/GRADING-EXISTING-CONNECTORS.md). No code was copied.
+
+  - OpenClaw: https://github.com/openclaw/openclaw (MIT). Its documentation was read for the skill format in
+    integrations/openclaw/. No code was copied.
+
+  - Model Context Protocol: reins/mcp/ implements the public MCP specification (JSON-RPC over stdio) with the
+    Python standard library. No SDK code is included.
+
+Sesame, ROS, Unitree, Go2, OpenClaw and Claude are the names of their owners' projects or products. Their use here
+describes compatibility and implies no endorsement.

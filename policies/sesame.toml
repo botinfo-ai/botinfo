@@ -1,0 +1,55 @@
+# Owner policy for a Sesame quadruped (github.com/dorianborian/sesame-robot) on its stock or patched firmware.
+# Tested against the firmware MOCK only. Never run on a real robot.
+
+[policy]
+name = "sesame-basic"
+robot = "Sesame quadruped (firmware mock)"
+description = "Short walks and turns; every pose needs the owner's OK because stop cannot interrupt a pose."
+command_ttl_s = 5.0
+max_clock_skew_s = 1.0
+on_busy = "replace"
+
+[stop]
+latch = true
+on_client_disconnect = "stop"
+on_backend_error = "stop"
+
+[lease]
+keepalive_s = 1.0            # a third of the firmware patch's 3 s motion timeout
+max_lease_s = 10.0           # 10 walking steps take about 9.4 s at default settings
+renewable = false            # walks are counted in steps, not renewed
+max_total_s = 20.0           # back-to-back walks and turns: at most 20 s of motion ...
+min_rest_s = 1.0             # ... then at least 1 s of rest
+
+[rate_limits]
+all = { max = 40, window_s = 10.0 }
+motion = { max = 6, window_s = 10.0 }
+
+[actions.walk]
+kind = "motion"
+description = "Walk forward or backward a number of gait cycles (steps), then stop."
+params.direction = { type = "enum", values = ["forward", "backward"] }
+params.steps = { type = "integer", min = 1, max = 10, description = "Gait cycles; about 0.92 s each at default settings." }
+
+[actions.turn]
+kind = "motion"
+description = "Turn in place a number of gait cycles (steps), then stop."
+params.direction = { type = "enum", values = ["left", "right"] }
+params.steps = { type = "integer", min = 1, max = 8, description = "Gait cycles; about 1.12 s each." }
+
+[actions.emote]
+kind = "oneshot"
+uninterruptible = true       # the firmware finishes a pose (0.4-5.8 s) even if stop arrives
+confirm = true
+description = "One of the firmware's built-in moves."
+params.name = { type = "enum", values = ["wave", "dance", "swim", "point", "pushup", "bow", "cute", "freaky", "worm", "shake", "shrug", "dead", "crab"] }
+
+[actions.posture]
+kind = "oneshot"
+description = "Stand up, or rest (all servos to 90 degrees)."
+params.name = { type = "enum", values = ["stand", "rest"] }
+
+[actions.face]
+kind = "instant"
+description = "Show an emotion on the screen (no movement)."
+params.name = { type = "enum", values = ["happy", "sad", "angry", "surprised", "sleepy", "love", "excited", "confused", "thinking"] }

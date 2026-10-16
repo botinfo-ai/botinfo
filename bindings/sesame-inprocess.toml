@@ -1,0 +1,4 @@
+# The Sesame firmware MOCK inside the Reins process (demo; no separate mock server needed).
+[binding]
+kind = "sesame-mock"
+patched = true               # imitate the firmware with BotInfo's motion-timeout patch; false = stock firmware

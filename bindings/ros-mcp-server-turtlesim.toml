@@ -1,0 +1,40 @@
+# DRAFT, UNTESTED: front ros-mcp-server (github.com/robotmcp/ros-mcp-server, Apache-2.0, v3.1.2 read on
+# 2026-10-16) driving turtlesim through rosbridge. Not run: this Mac has no Docker and no ROS.
+# Needs: rosbridge_server on ws://127.0.0.1:9090 with turtlesim (their tests/integration/docker/Dockerfile.ros2-humble
+# is headless and multi-arch), and `uvx ros-mcp` available. Use with a turtlesim policy (turtlesim's world is
+# 0..11.09 on both axes, and it moves each Twist for about 1 s, so keep keepalive_s well under 1 s).
+# Tool names and arguments below are from ros-mcp-server's source (ros_mcp/tools/topics.py); the result shapes
+# (and whether failures come back as {"error": ...}) are NOT verified.
+
+[binding]
+kind = "mcp-tools"
+label = "ros-mcp-server v3.1.2 + rosbridge + turtlesim (UNTESTED DRAFT)"
+command = ["uvx", "ros-mcp", "--transport=stdio"]
+error_keys = ["error"]
+
+[stop]
+call = { tool = "publish_once", args = { topic = "/turtle1/cmd_vel", msg_type = "geometry_msgs/msg/Twist", msg = { linear = { x = 0.0, y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = 0.0 } } } }
+repeat = 2
+
+[actions.drive]
+start = { tool = "publish_once", args = { topic = "/turtle1/cmd_vel", msg_type = "geometry_msgs/msg/Twist", msg = { linear = { x = "$linear_mps", y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = "$angular_rps" } } } }
+keepalive = "start"
+path = { model = "unicycle", linear = "$linear_mps", angular = "$angular_rps", duration = "$duration_s" }
+
+[actions.set_led]
+# turtlesim has no light; its pen colour stands in (service /turtle1/set_pen, turtlesim/srv/SetPen). This draft
+# always sets red: the color parameter is accepted by the policy but not passed through.
+call = { tool = "call_service", args = { service_name = "/turtle1/set_pen", service_type = "turtlesim/srv/SetPen", request = { r = 255, g = 0, b = 0, width = 3, off = 0 } } }
+
+[status]
+call = { tool = "subscribe_once", args = { topic = "/turtle1/pose", msg_type = "turtlesim/msg/Pose" } }
+fields.x = { path = "msg.x", type = "number" }
+fields.y = { path = "msg.y", type = "number" }
+fields.heading_rad = { path = "msg.theta", type = "number" }
+fields.linear_mps = { path = "msg.linear_velocity", type = "number" }
+fields.angular_rps = { path = "msg.angular_velocity", type = "number" }
+
+[pose]
+x = "x"
+y = "y"
+heading = "heading_rad"

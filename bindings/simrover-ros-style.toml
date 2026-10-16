@@ -1,0 +1,33 @@
+# Map policies/simrover.toml onto the reference ROS-style connector (tool names as in ros-mcp-server).
+# connector = "simrover-ros-style" runs the connector and the simulator inside the Reins process (demo).
+
+[binding]
+kind = "mcp-tools"
+label = "ROS-style generic connector (reference) + SimRover"
+connector = "simrover-ros-style"
+error_keys = ["error"]
+
+[stop]
+call = { tool = "publish_once", args = { topic = "/cmd_vel", msg_type = "geometry_msgs/msg/Twist", msg = { linear = { x = 0.0, y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = 0.0 } } } }
+repeat = 2
+
+[actions.drive]
+start = { tool = "publish_once", args = { topic = "/cmd_vel", msg_type = "geometry_msgs/msg/Twist", msg = { linear = { x = "$linear_mps", y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = "$angular_rps" } } } }
+keepalive = "start"
+path = { model = "unicycle", linear = "$linear_mps", angular = "$angular_rps", duration = "$duration_s" }
+
+[actions.set_led]
+call = { tool = "publish_once", args = { topic = "/led", msg_type = "std_msgs/msg/String", msg = { data = "$color" } } }
+
+[status]
+call = { tool = "subscribe_once", args = { topic = "/odom", msg_type = "nav_msgs/msg/Odometry" } }
+fields.x = { path = "msg.pose.pose.position.x", type = "number" }
+fields.y = { path = "msg.pose.pose.position.y", type = "number" }
+fields.heading_rad = { path = "msg.pose.pose.orientation", type = "yaw_from_quaternion" }
+fields.linear_mps = { path = "msg.twist.twist.linear.x", type = "number" }
+fields.angular_rps = { path = "msg.twist.twist.angular.z", type = "number" }
+
+[pose]
+x = "x"
+y = "y"
+heading = "heading_rad"

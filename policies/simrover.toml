@@ -1,0 +1,47 @@
+# Owner policy for SimRover (simulation). The same file can sit in front of any connector that has a binding
+# for these actions (bindings/simrover-*.toml, bindings/ros-mcp-server-turtlesim.toml with its own limits).
+# Every key is listed in docs/POLICY.md. Unknown keys are an error.
+
+[policy]
+name = "simrover-basic"
+robot = "SimRover (2D simulation, no hardware)"
+description = "Slow driving inside a 4 m x 4 m box. Faster than 0.35 m/s needs the owner's OK."
+command_ttl_s = 5.0          # a pending command (waiting for confirmation) or a late one older than this is dropped
+max_clock_skew_s = 1.0       # tolerance when judging a caller's issued_at
+require_request_id = false   # true: every action call must carry a unique request_id
+on_busy = "replace"          # a new motion replaces the running one (stop, then start)
+
+[stop]
+latch = true                 # after any stop, motion stays refused until the owner resumes
+on_client_disconnect = "stop"
+on_backend_error = "stop"
+
+[lease]
+keepalive_s = 0.2            # re-send the running motion this often (the base's own cmd_vel timeout may be 0.5 s)
+max_lease_s = 5.0            # no single motion runs longer than this without a renewal
+renewable = true
+max_total_s = 20.0           # no stretch of motion longer than this, whether by renewals or back-to-back commands
+min_rest_s = 1.0             # ... without this much rest in between
+
+[rate_limits]
+all = { max = 40, window_s = 10.0 }      # every call except reins_stop
+motion = { max = 5, window_s = 10.0 }    # motion commands accepted
+
+[workspace]
+x = [-2.0, 2.0]
+y = [-2.0, 2.0]
+margin_m = 0.25              # a motion whose predicted path leaves the box shrunk by this is refused
+check_every_s = 0.1          # while moving, the pose is checked this often; outside the box = stop
+
+[actions.drive]
+kind = "motion"
+description = "Drive at a constant speed and turn rate for a bounded time, then stop."
+duration_param = "duration_s"
+params.linear_mps = { type = "number", min = -0.3, max = 0.5, confirm_above = 0.35, unit = "m/s", description = "Forward speed (negative = backward)." }
+params.angular_rps = { type = "number", min = -1.0, max = 1.0, default = 0.0, unit = "rad/s", description = "Turn rate (positive = left)." }
+params.duration_s = { type = "number", min = 0.1, max = 5.0, unit = "s", description = "How long to drive." }
+
+[actions.set_led]
+kind = "instant"
+description = "Set the status light."
+params.color = { type = "enum", values = ["off", "red", "green", "blue"] }
