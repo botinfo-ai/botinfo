@@ -245,8 +245,6 @@ def cmd_audit_verify(a) -> int:
 
 
 def main(argv=None) -> int:
-    if sys.version_info < (3, 11):
-        return _err("Python 3.11 or newer is needed (tomllib)")
     ap = argparse.ArgumentParser(prog="reins", description="Reins by BotInfo: policy layer + Safety Benchmark "
                                  "(v0, simulation and mocks only)")
     ap.add_argument("--version", action="version", version=f"reins {__version__}")
