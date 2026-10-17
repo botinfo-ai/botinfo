@@ -229,6 +229,25 @@ class RealTime(unittest.TestCase):
         self.assertIn("Some connector vX", (out / "LEADERBOARD.md").read_text())
         self.assertNotIn("No third-party connector has been graded yet", leaderboard(card, [rt]))
 
+    def test_leaderboard_leads_with_third_party_code_on_real_ros(self):
+        card = run(stack_ids=["rover-nowd/raw"], case_ids={"CTL-01"})
+
+        def rt(group, sid):
+            c = json.loads(json.dumps(card))
+            for s in c["stacks"]:
+                s.update(id=sid, label=sid, realtime=True, group=group)
+            return c
+        emu = rt("ros-mcp-server-v3.1.2-emulated-rosbridge", "emu/raw")
+        ros2 = rt("ros-mcp-server-v3.1.2-ros2-humble-turtlesim", "ros2/raw")
+        text = leaderboard(card, [emu, ros2])               # file order must not matter
+        heads = [l for l in text.split("\n") if l.startswith("## ")]
+        self.assertIn("real ROS 2", heads[0])
+        self.assertTrue(heads[1].startswith("## Simulated stacks"))
+        self.assertIn("emulated rosbridge", heads[2])
+        every = next(l for l in text.split("\n") if l.startswith("| Case | Severity"))
+        self.assertLess(every.index("ros2/raw"), every.index("rover-nowd/raw"))
+        self.assertLess(every.index("rover-nowd/raw"), every.index("emu/raw"))
+
 
 class TurtlesimTruth(unittest.TestCase):
     """The turtlesim record (bench/turtlesim.py) without Docker: feed it the recorder's events."""
