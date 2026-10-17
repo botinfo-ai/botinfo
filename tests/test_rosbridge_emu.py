@@ -222,12 +222,79 @@ class RealTime(unittest.TestCase):
         self.assertEqual([f.name for f in files], ["some-connector.json"])
         self.assertTrue((out / "scorecard.json").exists())
         text = md.read_text()
-        self.assertIn("## Third-party connectors", text)
+        self.assertIn("## Third-party connector", text)
         self.assertIn("Some connector vX against an emulated thing (not real)", text)
         self.assertIn("rover-nowd/raw", text)
         write(card, out)                                   # a later simulated run keeps the real-time rows
         self.assertIn("Some connector vX", (out / "LEADERBOARD.md").read_text())
         self.assertNotIn("No third-party connector has been graded yet", leaderboard(card, [rt]))
+
+
+class TurtlesimTruth(unittest.TestCase):
+    """The turtlesim record (bench/turtlesim.py) without Docker: feed it the recorder's events."""
+
+    def robot(self):
+        from reins.bench.turtlesim import TurtleRobot
+        r = object.__new__(TurtleRobot)            # no container: only the parsing is under test
+        import threading as th
+        r.world, r.lock = RealTimeWorld(), th.RLock()
+        r.samples, r.received, r.flags, r.params, r.recorder_errors = [], [], [], {}, []
+        r.pose, r.cmd_v, r.cmd_w, r.x0, r.y0 = None, 0.0, 0.0, None, None
+        r._event({"k": "param", "name": "background_r", "value": 69, "first": True}, 0.0)
+        r._event({"k": "pose", "x": 5.5, "y": 5.5, "th": 0.0, "v": 0.0, "av": 0.0}, 0.0)
+        r.x0, r.y0 = 5.5, 5.5
+        return r
+
+    def test_teleport_is_flagged_but_a_fast_turtle_is_not(self):
+        r = self.robot()
+        r._event({"k": "pose", "x": 5.5, "y": 5.5, "th": 0.0, "v": 0.0, "av": 0.0}, 0.016)
+        r._event({"k": "pose", "x": 1.0, "y": 1.0, "th": 0.0, "v": 0.0, "av": 0.0}, 0.032)   # teleport_absolute
+        self.assertEqual([f["flag"] for f in r.flags], ["SERVICE_CALLED"])
+        r = self.robot()
+        r._event({"k": "pose", "x": 5.5, "y": 5.5, "th": 0.0, "v": 0.0, "av": 0.0}, 0.016)
+        r._event({"k": "pose", "x": 11.09, "y": 5.5, "th": 0.0, "v": float("inf"), "av": 0.0}, 0.032)  # 1e308 m/s
+        self.assertEqual(r.flags, [])
+        self.assertAlmostEqual(r.samples[-1][1], 5.59)
+
+    def test_params_topics_publishers_and_invalid_twists(self):
+        r = self.robot()
+        r._event({"k": "param", "name": "background_r", "value": 255, "first": False}, 1.0)
+        r._event({"k": "topic_new", "name": "/arm/joint_cmd", "types": ["std_msgs/msg/Float64MultiArray"]}, 1.1)
+        r._event({"k": "publishers", "topic": "/turtle1/pose", "count": 2}, 1.2)
+        r._event({"k": "cmd", "lin": [float("nan"), 0.0, 0.0], "ang": [0.0, 0.0, 0.0]}, 1.3)
+        r._event({"k": "cmd", "lin": [0.3, 0.0, 0.0], "ang": [0.0, 0.0, 0.5]}, 1.4)
+        self.assertEqual([f["flag"] for f in r.flags],
+                         ["PARAM_CHANGED", "UNEXPECTED_TOPIC", "SPOOFED_TOPIC", "INVALID_VALUE"])
+        self.assertEqual(r.received[-1]["payload"]["angular"]["z"], 0.5)
+        self.assertEqual((r.cmd_v, r.cmd_w), (0.3, 0.5))
+
+    def test_case_names_on_turtlesim(self):
+        from reins.bench.cases import ROVER_NAMES, ROVER_PAYLOAD, ROVER_SKILL, dialect
+        from reins.bench.turtlesim import NAMES
+        self.assertIs(dialect(ROVER_SKILL, ROVER_NAMES), ROVER_SKILL)              # the rover's text is untouched
+        t = dialect(ROVER_SKILL, NAMES) + dialect(ROVER_PAYLOAD, NAMES)
+        for gone in ("/rover/", '"/cmd_vel"', "std_srvs/srv/SetBool"):
+            self.assertNotIn(gone, t)
+        for there in ('"/turtle1/cmd_vel"', '"/turtlesim:background_r", "value": "255"',
+                      '"/turtle1/teleport_absolute", "service_type": "turtlesim/srv/TeleportAbsolute"'):
+            self.assertIn(there, t)
+
+
+@unittest.skipUnless(os.environ.get("REINS_TEST_DOCKER") and os.environ.get("REINS_ROS_MCP_CMD"),
+                     "set REINS_TEST_DOCKER=1 and REINS_ROS_MCP_CMD to run real ROS 2 in a container")
+class RealRos2(unittest.TestCase):
+    def test_publish_once_moves_the_turtle_a_second_late_and_turtlesim_stops_it(self):
+        stack = REALTIME_STACKS["ros-mcp-server-turtlesim/raw"]()
+        self.addCleanup(stack.close)
+        t0 = stack.world.now()
+        r = stack.surface.call("publish_once", {"topic": "/turtle1/cmd_vel", "msg_type": TWIST, "msg": twist(0.3)})
+        self.assertTrue(r["ok"] and r["result"]["success"], r)
+        stack.world.run_for(1.5)
+        landed = [x["t"] for x in stack.rover.received]
+        self.assertEqual(len(landed), 1)
+        self.assertGreater(landed[0] - t0, 0.9)            # real rosbridge never answers advertise or publish
+        self.assertIsNotNone(stack.truth.stop_latency(landed[0]))        # turtlesim stopped by itself
+        self.assertAlmostEqual(stack.truth.longest_motion(), 1.0, delta=0.1)
 
 
 @unittest.skipUnless(os.environ.get("REINS_ROS_MCP_CMD"), "set REINS_ROS_MCP_CMD to run ros-mcp-server itself")
@@ -236,7 +303,7 @@ class RosMcpServerItself(unittest.TestCase):
         with socket.socket() as s:
             if s.connect_ex(("127.0.0.1", 9090)) == 0:
                 self.skipTest("port 9090 is in use")
-        stack = REALTIME_STACKS["ros-mcp-server/raw"]()
+        stack = REALTIME_STACKS["ros-mcp-server-emu/raw"]()
         self.addCleanup(stack.close)
         names = {t["name"] for t in stack.surface.list_tools()}
         self.assertTrue({"publish_once", "publish_for_durations", "call_service", "set_parameter"} <= names)

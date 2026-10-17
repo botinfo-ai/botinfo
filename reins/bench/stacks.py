@@ -37,6 +37,7 @@ from ..clock import RealClock, VirtualClock
 from ..core import Reins
 from ..mcp.client import StdioMCPClient
 from ..policy import load_policy
+from .cases import ROVER_NAMES
 from .oracle import RoverTruth, SesameTruth
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -228,6 +229,8 @@ class Stack:
     fidelity: str = ""
     extras: object = None            # () -> dict, added to each result as connector_trace
     closers: list = field(default_factory=list)
+    names: dict = None               # the ROS names the cases use (cases.ROVER_NAMES when None)
+    on_cut: object = None            # what cutting the link does besides link.up = False (real ROS: kill rosbridge)
 
     # ---------------------------------------------------------------- harness hooks
     def agent_disconnect(self):
@@ -243,6 +246,8 @@ class Stack:
     def cut_link(self):
         """The wire to the robot drops (or the process in front of the robot dies) and stays down."""
         self.link.up = False
+        if self.on_cut is not None:
+            self.on_cut()
 
     def owner_stop(self):
         """The owner's software stop. Behind Reins: the owner channel. Raw: the connector's own stop route."""
@@ -251,7 +256,8 @@ class Stack:
         if self.robot == "sesame":
             name, args = "send_command", {"command": "stop"}
         else:
-            name, args = "publish_once", {"topic": "/cmd_vel", "msg_type": "geometry_msgs/msg/Twist", "msg": ZERO_TWIST}
+            name, args = "publish_once", {"topic": (self.names or ROVER_NAMES)["cmd_vel"],
+                                          "msg_type": "geometry_msgs/msg/Twist", "msg": ZERO_TWIST}
         if self.realtime:                # the owner is not the agent: their stop must not wait in the script
             sent = threading.Event()
 
@@ -430,42 +436,65 @@ def _kill(client: StdioMCPClient):
     client.close()
 
 
-def _ros_mcp(stack_id: str, with_reins: bool) -> Stack:
+def _launch_ros_mcp(closers: list):
+    """ros-mcp-server as its own process over MCP stdio, in a small environment and a scratch working directory."""
     cmd = ros_mcp_command()
     if not shutil.which(cmd[0]) and not Path(cmd[0]).exists():
         raise RuntimeError(f"{cmd[0]!r} not found: install uv, or set REINS_ROS_MCP_CMD to a ros-mcp command")
     version = ros_mcp_version(cmd)
+    keep = os.environ.get("REINS_BENCH_LOGS")
+    workdir = Path(tempfile.mkdtemp(prefix="reins-rosmcp-", dir=keep or None))
+    err = open(workdir / "ros-mcp-server.stderr.log", "w")
+    client = StdioMCPClient(cmd, env=_server_env(), cwd=str(workdir), timeout_s=15.0, stderr=err)
+    closers.append(lambda: _kill(client))
+    closers.append(err.close)
+    if not keep:
+        closers.append(lambda: shutil.rmtree(workdir, ignore_errors=True))
+    return client, version
+
+
+def _front(client, with_reins: bool, binding: str, policy: str, w):
+    """Raw: the agent gets ros-mcp-server's own tools. Reins: the agent gets Reins, which drives ros-mcp-server."""
+    if not with_reins:
+        return None, Surface(client, False, background=("publish_for_durations",))
+    backend = ToolTemplateBackend(client, load_binding(BINDINGS / binding))
+    reins = Reins(load_policy(POLICIES / policy), backend, clock=w.clock, audit=AuditLog(clock=w.clock))
+    w.tickers.append(reins.tick)
+    return reins, Surface(reins, True)
+
+
+def _teardown(w, closers):
+    for c in [w.close] + closers:
+        try:
+            c()
+        except Exception:  # teardown must not hide the original error
+            pass
+
+
+def _extras(w, surface, more: dict):
+    def extras():
+        d = {k: (v() if callable(v) else v) for k, v in more.items()}
+        if w.tick_errors:
+            d["tick_errors"] = list(w.tick_errors)
+        if surface.background_log:
+            d["in_flight_calls"] = [{"tool": r["tool"], "result": r["result"]} for r in surface.background_log][:5]
+        return d
+    return extras
+
+
+def _ros_mcp_emulated(stack_id: str, with_reins: bool) -> Stack:
     w = RealTimeWorld()
     rover = SimRover(w.clock, cmd_timeout_s=0.0)
     link = Link()
     closers = []
-    keep = os.environ.get("REINS_BENCH_LOGS")
-    workdir = Path(tempfile.mkdtemp(prefix="reins-rosmcp-", dir=keep or None))
     try:
         emu = RosbridgeEmulator(rover, link=link, port=ROSBRIDGE_PORT).start()
+        client, version = _launch_ros_mcp(closers)
         closers.append(emu.close)
-        err = open(workdir / "ros-mcp-server.stderr.log", "w")
-        closers.append(err.close)
-        if not keep:
-            closers.append(lambda: shutil.rmtree(workdir, ignore_errors=True))
-        client = StdioMCPClient(cmd, env=_server_env(), cwd=str(workdir), timeout_s=15.0, stderr=err)
-        closers.insert(0, lambda: _kill(client))
-        reins = None
-        if with_reins:
-            backend = ToolTemplateBackend(client, load_binding(BINDINGS / "ros-mcp-server-simrover.toml"))
-            reins = Reins(load_policy(POLICIES / "simrover.toml"), backend, clock=w.clock,
-                          audit=AuditLog(clock=w.clock))
-            surface = Surface(reins, True)
-            w.tickers.append(reins.tick)
-        else:
-            surface = Surface(client, False, background=("publish_for_durations",))
+        reins, surface = _front(client, with_reins, "ros-mcp-server-simrover.toml", "simrover.toml", w)
         w.tickers.append(rover.step)
     except BaseException:
-        for c in [w.close] + closers:
-            try:
-                c()
-            except Exception:
-                pass
+        _teardown(w, closers)
         raise
     with rover.lock:                     # the case's time 0 is now, after the server has started
         rover.step()
@@ -478,24 +507,64 @@ def _ros_mcp(stack_id: str, with_reins: bool) -> Stack:
     emu.reset_record()
     w.start()
     info = {"server": client.server_info, "ros_mcp_version": version, "tools": len(client.tools)}
-
-    def extras():
-        d = {"rosbridge": emu.summary(), "connector": info}
-        if w.tick_errors:
-            d["tick_errors"] = list(w.tick_errors)
-        if surface.background_log:
-            d["in_flight_calls"] = [{"tool": r["tool"], "result": r["result"]} for r in surface.background_log][:5]
-        return d
     label = ("Reins -> " if with_reins else "") + ROS_MCP_LABEL
     return Stack(id=stack_id, label=label, robot="rover", layer="reins" if with_reins else "raw",
                  robot_config="no base watchdog", connector_label=f"ros-mcp-server v{version} (third-party)",
                  reference=False, world=w, surface=surface, truth=RoverTruth(rover, w), link=link, reins=reins,
                  connector=client, rover=rover, realtime=True, group=ROS_MCP_GROUP, fidelity=ROS_MCP_FIDELITY,
-                 extras=extras, closers=closers)
+                 extras=_extras(w, surface, {"rosbridge": emu.summary, "connector": info}), closers=closers)
+
+
+ROS2_LABEL = f"ros-mcp-server v{ROS_MCP_VERSION} + rosbridge + turtlesim on real ROS 2 Humble (in a container)"
+ROS2_GROUP = f"ros-mcp-server-v{ROS_MCP_VERSION}-ros2-humble-turtlesim"
+
+
+def _ros2_fidelity(img: dict) -> str:
+    return (f"Real ros-mcp-server v{ROS_MCP_VERSION} code (PyPI ros-mcp {ROS_MCP_VERSION}) over MCP stdio, real ROS 2 "
+            f"Humble ({'; '.join(img['versions'])}) in a local container ({img['image']}, Colima on macOS arm64), "
+            "fresh for every case. Ground truth comes from a ROS 2 node in the same container that reads turtlesim "
+            "directly, not through rosbridge. The robot is turtlesim, a simulator: it stops by itself 1 s after the "
+            "last Twist. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.")
+
+
+def _ros_mcp_turtlesim(stack_id: str, with_reins: bool) -> Stack:
+    from . import turtlesim as ts
+    img = ts.ensure_image()
+    w = RealTimeWorld()
+    link = Link()
+    closers = []
+    ctr = turtle = None
+    try:
+        ctr = ts.RosContainer()
+        turtle = ts.TurtleRobot(w, ctr.name)
+        client, version = _launch_ros_mcp(closers)
+        reins, surface = _front(client, with_reins, "ros-mcp-server-turtlesim.toml", "turtlesim.toml", w)
+    except BaseException:
+        _teardown(w, closers + [c.close for c in (turtle, ctr) if c is not None])
+        raise
+    closers += [turtle.close, ctr.close]  # the container goes last
+    w.t0 = w.clock.now()                 # the case's time 0 is now, after everything has started
+    turtle.start_record()
+    w.start()
+    info = {"server": client.server_info, "ros_mcp_version": version, "tools": len(client.tools)}
+    ros = {"image": img["image"], "image_id": img["id"], "packages": img["versions"], "rosapi": ctr.ros}
+    label = ("Reins -> " if with_reins else "") + ROS2_LABEL
+    return Stack(id=stack_id, label=label, robot="rover", layer="reins" if with_reins else "raw",
+                 robot_config="turtlesim's own stop 1 s after the last Twist",
+                 connector_label=f"ros-mcp-server v{version} (third-party)", reference=False, world=w,
+                 surface=surface, truth=RoverTruth(turtle, w, cmd_topic=ts.CMD_TOPIC), link=link, reins=reins,
+                 connector=client, rover=turtle, realtime=True, group=ROS2_GROUP, fidelity=_ros2_fidelity(img),
+                 names=ts.NAMES, on_cut=ctr.kill_rosbridge,
+                 extras=_extras(w, surface, {"connector": info, "ros": ros,
+                                             "recorder": lambda: {"baseline_topics": len(turtle.baseline_topics),
+                                                                  "errors": turtle.recorder_errors[:5]}}),
+                 closers=closers)
 
 
 REALTIME_STACKS = {
-    "ros-mcp-server/raw": lambda: _ros_mcp("ros-mcp-server/raw", False),
-    "ros-mcp-server/reins": lambda: _ros_mcp("ros-mcp-server/reins", True),
+    "ros-mcp-server-turtlesim/raw": lambda: _ros_mcp_turtlesim("ros-mcp-server-turtlesim/raw", False),
+    "ros-mcp-server-turtlesim/reins": lambda: _ros_mcp_turtlesim("ros-mcp-server-turtlesim/reins", True),
+    "ros-mcp-server-emu/raw": lambda: _ros_mcp_emulated("ros-mcp-server-emu/raw", False),
+    "ros-mcp-server-emu/reins": lambda: _ros_mcp_emulated("ros-mcp-server-emu/reins", True),
 }
 ALL_STACKS = {**STACKS, **REALTIME_STACKS}

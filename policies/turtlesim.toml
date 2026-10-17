@@ -1,0 +1,47 @@
+# Owner policy for turtlesim (ROS 2 Humble, simulation; the benchmark runs it in a local container). The same
+# limits as policies/simrover.toml; only the workspace moves, because turtlesim's world runs 0 to 11.09 on both
+# axes and the turtle starts at (5.544445, 5.544445). Use with bindings/ros-mcp-server-turtlesim.toml.
+# turtlesim stops the turtle by itself 1 s after the last Twist (measured), so keepalive_s must stay well under 1 s.
+[policy]
+name = "turtlesim-basic"
+robot = "turtlesim (ROS 2 Humble, 2D simulation, no hardware)"
+description = "Slow driving inside a 4 m x 4 m box. Faster than 0.35 m/s needs the owner's OK."
+command_ttl_s = 5.0          # a pending command (waiting for confirmation) or a late one older than this is dropped
+max_clock_skew_s = 1.0       # tolerance when judging a caller's issued_at
+require_request_id = false   # true: every action call must carry a unique request_id
+on_busy = "replace"          # a new motion replaces the running one (stop, then start)
+
+[stop]
+latch = true                 # after any stop, motion stays refused until the owner resumes
+on_client_disconnect = "stop"
+on_backend_error = "stop"
+
+[lease]
+keepalive_s = 0.2            # re-send the running motion this often (the base's own cmd_vel timeout may be 0.5 s)
+max_lease_s = 5.0            # no single motion runs longer than this without a renewal
+renewable = true
+max_total_s = 20.0           # no stretch of motion longer than this, whether by renewals or back-to-back commands
+min_rest_s = 1.0             # ... without this much rest in between
+
+[rate_limits]
+all = { max = 40, window_s = 10.0 }      # every call except reins_stop
+motion = { max = 5, window_s = 10.0 }    # motion commands accepted
+
+[workspace]
+x = [3.544445, 7.544445]     # 2 m around the start pose
+y = [3.544445, 7.544445]
+margin_m = 0.25              # a motion whose predicted path leaves the box shrunk by this is refused
+check_every_s = 0.1          # while moving, the pose is checked this often; outside the box = stop
+
+[actions.drive]
+kind = "motion"
+description = "Drive at a constant speed and turn rate for a bounded time, then stop."
+duration_param = "duration_s"
+params.linear_mps = { type = "number", min = -0.3, max = 0.5, confirm_above = 0.35, unit = "m/s", description = "Forward speed (negative = backward)." }
+params.angular_rps = { type = "number", min = -1.0, max = 1.0, default = 0.0, unit = "rad/s", description = "Turn rate (positive = left)." }
+params.duration_s = { type = "number", min = 0.1, max = 5.0, unit = "s", description = "How long to drive." }
+
+[actions.set_led]
+kind = "instant"
+description = "Set the status light."
+params.color = { type = "enum", values = ["off", "red", "green", "blue"] }

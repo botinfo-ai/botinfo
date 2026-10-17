@@ -72,25 +72,30 @@ Method and cases: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 | Sesame firmware API (mock, stock), direct | 12 | 1/9 |
 | ROS-style connector → SimRover, no watchdog, direct | 0 | 0/10 |
 
-Third-party code, in real time: **ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS)**. That is
-its real code, with BotInfo's emulated rosbridge and SimRover (no base watchdog) in place of ROS and a robot:
+Third-party code, in real time: **ros-mcp-server v3.1.2**, its real code launched as its own process. The
+authoritative grade runs it on **real ROS 2 Humble + rosbridge + turtlesim in a local container**. turtlesim is a
+simulator that stops by itself 1 s after the last command. An earlier grade against BotInfo's emulated rosbridge
+in front of SimRover (no watchdog) is kept, labelled as such:
 
 | Stack | Score | Critical cases passed |
 |---|---|---|
+| Reins → ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble (in a container) | 100 | 10/10 |
+| ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble (in a container), direct | 11 | 1/10 (link lost, thanks to turtlesim's own stop) |
 | Reins → ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS) | 93 | 9/10 (link lost) |
 | ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS), direct | 4 | 0/10 |
 
-The direct row's one pass is the command flood, and only because each `publish_once` call takes about 2 s
-(it waits for replies rosbridge never sends). A stop sent during `publish_for_durations` waits for that call to
-end. Details and the emulator's limits: [docs/GRADING-EXISTING-CONNECTORS.md](docs/GRADING-EXISTING-CONNECTORS.md).
+Behind Reins, the lost-link pass on turtlesim is turtlesim's watchdog at work, not Reins'. Direct, ros-mcp-server
+runs one tool call at a time, and each `publish_once` takes about 2 s because it waits for replies rosbridge
+never sends (measured on rosbridge 2.0.8). So a stop sent during `publish_for_durations` waits for that call to
+end. Details and what each setup leaves out: [docs/GRADING-EXISTING-CONNECTORS.md](docs/GRADING-EXISTING-CONNECTORS.md).
 
 Read these numbers with three things in mind:
 
 1. **Every row is a simulator or a mock.** The direct connectors above are BotInfo's reference models of
    existing patterns: a direct firmware API, and a generic ROS connector shaped like ros-mcp-server. One
-   third-party connector has been graded so far, in real time: **ros-mcp-server v3.1.2 against an emulated
-   rosbridge (not real ROS)**. That is its real code, but BotInfo's emulation of rosbridge in front of SimRover
-   stands in for ROS. Its rows, and what the emulation leaves out, are in
+   third-party connector has been graded so far, in real time: **ros-mcp-server v3.1.2**, on real ROS 2 Humble
+   with turtlesim (a simulator) in a container, and also against BotInfo's emulated rosbridge. Its rows, and what
+   each setup leaves out, are in
    [results/LEADERBOARD.md](results/LEADERBOARD.md) and
    [docs/GRADING-EXISTING-CONNECTORS.md](docs/GRADING-EXISTING-CONNECTORS.md).
 2. **Reins and the benchmark were written together, by the same team.** Reins passing its authors' tests proves
@@ -119,9 +124,9 @@ Reins is an MCP server on stdio. For Claude Code, put this in a project `.mcp.js
 
 `python3` must be 3.11 or newer. That binding runs the simulator inside the Reins process.
 `bindings/simrover-ros-style-stdio.toml` instead launches the connector as a separate MCP server and fronts it.
-That is the same arrangement as fronting ros-mcp-server: `bindings/ros-mcp-server-simrover.toml` is tested
-against the emulated rosbridge (not real ROS), and `bindings/ros-mcp-server-turtlesim.toml` is the same pattern
-for turtlesim, not yet run on it. For the Sesame mock, use `policies/sesame.toml` with
+That is the same arrangement as fronting ros-mcp-server: `bindings/ros-mcp-server-turtlesim.toml` (with
+`policies/turtlesim.toml`) is tested on real ROS 2 Humble + rosbridge + turtlesim in a container, and
+`bindings/ros-mcp-server-simrover.toml` against the emulated rosbridge (not real ROS). For the Sesame mock, use `policies/sesame.toml` with
 `bindings/sesame-inprocess.toml`.
 
 While it runs, the owner uses a local socket (`~/.reins/<policy>.sock`, owner-only permissions):

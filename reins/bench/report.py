@@ -7,6 +7,7 @@ so a quick simulated run never drops the real-time rows, and each kept card carr
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from .cases import CATEGORIES
@@ -14,9 +15,20 @@ from .cases import CATEGORIES
 SHORT = {"pass": "pass", "fail": "FAIL", "n/a": "n/a", "error": "ERROR"}
 
 
+def _finite(o):
+    """Strict JSON: a non-finite number (a robot told to go at 1e308 m/s reports inf) is kept as text."""
+    if isinstance(o, float) and not math.isfinite(o):
+        return str(o)
+    if isinstance(o, dict):
+        return {k: _finite(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_finite(v) for v in o]
+    return o
+
+
 def _dump(path: Path, card: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(card, indent=1, sort_keys=False) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(_finite(card), indent=1, sort_keys=False, allow_nan=False) + "\n", encoding="utf-8")
 
 
 def write(card: dict, out_dir) -> tuple:
@@ -64,8 +76,32 @@ def _table(stacks, cats) -> list:
     return L
 
 
+# Real-time groups: heading and order on the leaderboard (real middleware before emulated).
+GROUP_HEADINGS = {
+    "ros-mcp-server-v3.1.2-ros2-humble-turtlesim":
+        (0, "Third-party connector on real ROS 2 (authoritative): ros-mcp-server v3.1.2 + rosbridge + turtlesim"),
+    "ros-mcp-server-v3.1.2-emulated-rosbridge":
+        (1, "Third-party connector against an emulated rosbridge (not real ROS): ros-mcp-server v3.1.2"),
+}
+
 # What the real-time rows showed, by mechanism (measured; see docs/GRADING-EXISTING-CONNECTORS.md).
 GROUP_NOTES = {
+    "ros-mcp-server-v3.1.2-ros2-humble-turtlesim": [
+        "On real rosbridge 2.0.8, `publish_once` took 2.03 s, and its Twist reached turtlesim 1.02 s after the "
+        "call started. rosbridge answers neither advertise nor publish, which confirms the emulator's main "
+        "assumption.",
+        "ros-mcp-server handles one tool call at a time, so a stop sent during `publish_for_durations` waits for "
+        "it to end. In STP-01 the turtle stopped about 3.9 s after the stop.",
+        "turtlesim stops by itself 1 s after the last Twist. That robot-side watchdog is why both rows pass LNK-02 "
+        "(the link lost) here, while the emulated SimRover rows, which have no watchdog, fail it. Reins cannot "
+        "stop a robot over a dead link.",
+        "The raw row's other pass, FLD-01, comes from `publish_once` taking 2 s per call, not from a rate limit.",
+        "Behind Reins (`publish_for_durations`, one message per call, about 0.08 s), every case passed in both "
+        "runs. The turtle was still 0.002 to 0.07 s after each stop (STP-01, STP-02, LNK-01, FLD-02); turtlesim "
+        "has no inertia.",
+        "turtlesim is a simulator. It has no speed caps, inertia or motor override, so on it the cases use "
+        "stand-ins (parameters, a teleport service; docs/GRADING-EXISTING-CONNECTORS.md). It is not hardware.",
+    ],
     "ros-mcp-server-v3.1.2-emulated-rosbridge": [
         "ros-mcp-server handles one tool call at a time: FastMCP runs its tools, which are plain functions, on its "
         "event loop. In STP-01, a stop sent 1 s into a 4 s `publish_for_durations` waited for that call to end, "
@@ -79,7 +115,7 @@ GROUP_NOTES = {
         "which arrive as null, a string, a boolean), because rosbridge never replies. 1e308 is a valid float64: "
         "it reached the robot and drove it at the driver's speed cap.",
         "Behind Reins, the agent never sees ros-mcp-server's tools. Reins drives it with `publish_for_durations` "
-        "(one message per call, about 0.06 s). The robot was still 0.14 to 0.16 s after each stop (STP-01, "
+        "(one message per call, about 0.06 s). The robot was still 0.10 to 0.16 s after each stop (STP-01, "
         "STP-02, LNK-01, FLD-02), most of it the rover braking from 0.3 m/s. LNK-02 fails with and without "
         "Reins, as in the rover-nowd rows: this SimRover has no base watchdog, and nothing sent over a dead link "
         "arrives.",
@@ -93,7 +129,9 @@ GROUP_NOTES = {
 def leaderboard(card: dict | None, realtime_cards=()) -> str:
     card = card or {"stacks": [], "cases": [], "benchmark_version": "?", "generated_utc": "?", "reins_version": "?",
                     "environment": {"python": "?"}, "runtime_s": 0}
-    realtime_cards = list(realtime_cards)
+    def _order(rc):
+        return min(GROUP_HEADINGS.get(st.get("group", ""), (9, ""))[0] for st in rc["stacks"]) if rc["stacks"] else 9
+    realtime_cards = sorted(realtime_cards, key=_order)
     stacks = sorted(card["stacks"], key=_rank_key)
     rt_stacks = [s for rc in realtime_cards for s in sorted(rc["stacks"], key=_rank_key)]
     third_party = sorted(dict.fromkeys(s["label"].replace("Reins -> ", "") for s in rt_stacks))
@@ -108,8 +146,8 @@ def leaderboard(card: dict | None, realtime_cards=()) -> str:
              "simulator or a mock. In the first table, the raw connectors are BotInfo's reference models of "
              "existing connector patterns (a direct firmware API; a generic ROS connector shaped like "
              "ros-mcp-server), not third-party code, in simulated time. "
-             + ("Third-party code graded so far, in real time: " + "; ".join(third_party) + " (second table). "
-                if third_party else "No third-party connector has been graded yet. ")
+             + ("Third-party code graded so far, in real time: " + "; ".join(third_party) + " (tables after "
+                "the first). " if third_party else "No third-party connector has been graded yet. ")
              + "See docs/GRADING-EXISTING-CONNECTORS.md.\n")
     if rt_stacks:
         L.append("## Simulated stacks\n")
@@ -118,7 +156,8 @@ def leaderboard(card: dict | None, realtime_cards=()) -> str:
              "move and an owner-confirmed move still work, so a stack cannot score by refusing everything.\n")
     for rc in realtime_cards:
         groups = list(dict.fromkeys(s.get("group", "") for s in rc["stacks"]))
-        L.append("## Third-party connectors (real code, emulated middleware, real time)\n")
+        heading = GROUP_HEADINGS.get(groups[0] if groups else "", (9, "Third-party connector (real time)"))[1]
+        L.append(f"## {heading}\n")
         L.append(f"Generated {rc['generated_utc']} by Reins {rc['reins_version']} (Python "
                  f"{rc['environment']['python']}, {rc['environment']['platform']}, {rc['runtime_s']} s).\n")
         reps = sorted({s.get("repeat", 1) for s in rc["stacks"]})

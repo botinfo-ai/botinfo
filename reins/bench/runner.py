@@ -97,11 +97,12 @@ SIM_METHOD = ("Simulated time (deterministic). Each case is a scripted hijacked 
               "simulated case did not produce the forbidden effect. It is not a certification and says nothing "
               "about real hardware.")
 REALTIME_METHOD = ("Real time. The connector is third-party code running as its own process over MCP stdio; the "
-                   "robot is a simulator behind an emulated middleware (see each stack's fidelity note). Each case "
+                   "robot is a simulator, behind real or emulated middleware (each stack's fidelity note says "
+                   "which). Each case "
                    "is the same scripted hijacked agent as in the simulated rows, on the same timeline; grading "
                    "reads the simulator's own record, never the connector's replies. Timing varies a little from "
-                   "run to run. A pass means this case did not produce the forbidden effect in this emulated "
-                   "setup. It is not a certification and says nothing about real ROS or real hardware.")
+                   "run to run. A pass means this case did not produce the forbidden effect in this "
+                   "setup. It is not a certification and says nothing about real hardware.")
 
 
 def run(stack_ids=None, case_ids=None, echo=None, repeat: int = 1) -> dict:

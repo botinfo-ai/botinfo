@@ -2,7 +2,7 @@
  "benchmark": "Reins Safety Benchmark",
  "benchmark_version": "0.1",
  "reins_version": "0.1.0",
- "generated_utc": "2026-10-17T00:43:32Z",
+ "generated_utc": "2026-10-17T02:18:45Z",
  "runtime_s": 0.59,
  "environment": {
   "python": "3.12.13",

@@ -1,7 +1,7 @@
 # Front ros-mcp-server v3.1.2 (github.com/robotmcp/ros-mcp-server, Apache-2.0) driving SimRover through rosbridge.
 # Adapted from ros-mcp-server-turtlesim.toml (topics /cmd_vel and /odom; SimRover's /led stands in for the pen).
 # Tested 2026-10-16 against BotInfo's emulated rosbridge (reins/backends/rosbridge_emu.py) only, NOT against real
-# ROS. The benchmark stack ros-mcp-server/reins uses this file with policies/simrover.toml.
+# ROS. The benchmark stack ros-mcp-server-emu/reins uses this file with policies/simrover.toml.
 #
 # Why publish_for_durations and not publish_once: ros-mcp-server's publish_once waits up to 1 s for a reply to its
 # advertise and 1 s for a reply to its publish. rosbridge sends neither (its ros2 branch only logs), so with

@@ -1,17 +1,17 @@
-# DRAFT, UNTESTED ON TURTLESIM: front ros-mcp-server (github.com/robotmcp/ros-mcp-server, Apache-2.0, v3.1.2)
-# driving turtlesim through rosbridge. Not run: this Mac has no Docker and no ROS. The same pattern IS tested
-# against BotInfo's emulated rosbridge + SimRover: bindings/ros-mcp-server-simrover.toml.
-# Needs: rosbridge_server on ws://127.0.0.1:9090 with turtlesim (their tests/integration/docker/Dockerfile.ros2-humble
-# is headless and multi-arch), and `uvx ros-mcp` available. Use with a turtlesim policy (turtlesim's world is
-# 0..11.09 on both axes, and it moves each Twist for about 1 s, so keep keepalive_s well under 1 s).
-# Stop and drive use publish_for_durations (one message, ~0.06 s per call), not publish_once: publish_once waits
-# 1 s for a reply to advertise and 1 s for a reply to publish, which rosbridge never sends (measured against the
-# emulator: ~2 s per call, message on the robot after ~1 s). Tool names and arguments are from ros-mcp-server's
-# source (ros_mcp/tools/topics.py, services.py); result shapes were checked against the emulator, not turtlesim.
+# Front ros-mcp-server v3.1.2 (github.com/robotmcp/ros-mcp-server, Apache-2.0) driving turtlesim through rosbridge.
+# Tested 2026-10-16 on real ROS 2 Humble (rosbridge_server 2.0.8, rosapi 2.0.8, turtlesim 1.4.3) in a local
+# container: the benchmark stack ros-mcp-server-turtlesim/reins uses this file with policies/turtlesim.toml.
+# Needs rosbridge_server on ws://127.0.0.1:9090 with turtlesim and rosapi (reins/bench/docker/ros2-humble-turtlesim),
+# and `uvx ros-mcp` available. turtlesim's world runs 0 to 11.09 on both axes, and it stops the turtle 1 s after
+# the last Twist (measured), so keep keepalive_s well under 1 s.
+# Stop and drive use publish_for_durations (one message, ~0.08 s per call on real rosbridge), not publish_once:
+# publish_once waits 1 s for a reply to advertise and 1 s for a reply to publish, which rosbridge never sends
+# (measured on rosbridge 2.0.8: 2.03 s per call, Twist on the turtle after 1.02 s).
+# set_led maps to the pen colour (/turtle1/set_pen); this binding always sets red.
 
 [binding]
 kind = "mcp-tools"
-label = "ros-mcp-server v3.1.2 + rosbridge + turtlesim (UNTESTED ON TURTLESIM)"
+label = "ros-mcp-server v3.1.2 (rosbridge) + turtlesim"
 command = ["uvx", "ros-mcp", "--transport=stdio"]
 error_keys = ["error", "errors"]
 
@@ -25,8 +25,6 @@ keepalive = "start"
 path = { model = "unicycle", linear = "$linear_mps", angular = "$angular_rps", duration = "$duration_s" }
 
 [actions.set_led]
-# turtlesim has no light; its pen colour stands in (service /turtle1/set_pen, turtlesim/srv/SetPen). This draft
-# always sets red: the color parameter is accepted by the policy but not passed through.
 call = { tool = "call_service", args = { service_name = "/turtle1/set_pen", service_type = "turtlesim/srv/SetPen", request = { r = 255, g = 0, b = 0, width = 3, off = 0 } } }
 
 [status]

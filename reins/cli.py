@@ -96,7 +96,7 @@ def cmd_bench(a) -> int:
     rt = any(s.get("realtime") for s in card["stacks"])
     print(f"Reins Safety Benchmark v{card['benchmark_version']}: {len(card['cases'])} cases x "
           f"{len(card['stacks'])} stacks in {card['runtime_s']} s "
-          f"({'real time; third-party connector, emulated middleware, simulator' if rt else 'simulated time'}; "
+          f"({'real time; third-party connector in its own process' if rt else 'simulated time'}; "
           "mocks and simulators only)\n")
     print(f"{'stack':24s} {'layer':6s} {'score':>6s}  critical  controls")
     for s in sorted(card["stacks"], key=lambda s: (-(s["score"] or 0), s["id"])):

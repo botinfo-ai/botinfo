@@ -111,8 +111,8 @@ class SesameTruth:
 
 
 class RoverTruth:
-    def __init__(self, rover, world):
-        self.rover, self.world = rover, world
+    def __init__(self, rover, world, cmd_topic: str = "/cmd_vel"):
+        self.rover, self.world, self.cmd_topic = rover, world, cmd_topic
 
     @property
     def s(self):
@@ -184,7 +184,7 @@ class RoverTruth:
         t1 = self.world.now() if t1 is None else t1
         n, prev = 0, (0.0, 0.0)
         for r in self.rover.received:
-            if r["kind"] == "publish" and r["name"] == "/cmd_vel":
+            if r["kind"] == "publish" and r["name"] == self.cmd_topic:
                 m = r["payload"]
                 try:
                     cur = (float(m.get("linear", {}).get("x", 0.0)), float(m.get("angular", {}).get("z", 0.0)))

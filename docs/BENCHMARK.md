@@ -56,16 +56,23 @@ third-party code:
 
 ### Real-time stacks: third-party code
 
-| Stack id | Robot | Connector | Robot-side watchdog |
+| Stack id | Robot and middleware | Connector | Robot-side watchdog |
 |---|---|---|---|
-| `ros-mcp-server/raw` | SimRover behind an emulated rosbridge | ros-mcp-server v3.1.2 (third-party, real code) | none |
-| `ros-mcp-server/reins` | same | Reins in front of ros-mcp-server v3.1.2 (`bindings/ros-mcp-server-simrover.toml`) | none |
+| `ros-mcp-server-turtlesim/raw` | turtlesim on real ROS 2 Humble (rosbridge, rosapi) in a local container | ros-mcp-server v3.1.2 (third-party, real code) | turtlesim stops 1 s after the last Twist |
+| `ros-mcp-server-turtlesim/reins` | same | Reins in front of ros-mcp-server (`bindings/ros-mcp-server-turtlesim.toml`, `policies/turtlesim.toml`) | same |
+| `ros-mcp-server-emu/raw` | SimRover behind BotInfo's emulated rosbridge (not real ROS) | ros-mcp-server v3.1.2 (third-party, real code) | none |
+| `ros-mcp-server-emu/reins` | same | Reins in front of ros-mcp-server (`bindings/ros-mcp-server-simrover.toml`) | none |
 
-Both rows are labelled "ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS)". ros-mcp-server
-runs as its own process over MCP stdio, so these stacks run in **real time** (`RealTimeWorld` in
-`reins/bench/stacks.py`): the case script sleeps on a real clock while ticker threads step SimRover, Reins and
-the agent's own timed behaviours. The cases, the agent script and the grading are the same as for the simulated
-rows. Two things differ and are written down because they shape results:
+The turtlesim rows are the authoritative grade. They are labelled "ros-mcp-server v3.1.2 + rosbridge + turtlesim
+on real ROS 2 Humble (in a container)", and each case gets a fresh container (`reins/bench/turtlesim.py`; the
+image is built from `reins/bench/docker/ros2-humble-turtlesim/`). The emulated rows are labelled "ros-mcp-server
+v3.1.2 against an emulated rosbridge (not real ROS)". On turtlesim the cases use turtlesim's names
+(`turtlesim.NAMES` in place of `cases.ROVER_NAMES`); `docs/GRADING-EXISTING-CONNECTORS.md` lists them.
+
+ros-mcp-server runs as its own process over MCP stdio, so these stacks run in **real time** (`RealTimeWorld` in
+`reins/bench/stacks.py`): the case script sleeps on a real clock while ticker threads step the simulator, Reins
+and the agent's own timed behaviours. The cases, the agent script and the grading are the same as for the
+simulated rows. Some things differ and are written down because they shape results:
 
 - ros-mcp-server's `publish_for_durations` blocks for the whole motion. The agent's client keeps that one call
   in flight on its own thread, so the case can still stop, cut the link or disconnect at its scheduled time.
@@ -80,11 +87,11 @@ rows. Two things differ and are written down because they shape results:
 - `--repeat N` runs each case of a real-time stack N times. A case passes only if every run passed; the record
   keeps every run (`runs`).
 
-They are never part of a default run: `python3 -m reins bench --realtime [--repeat 2]` (about 11 minutes per
-repeat; needs `uvx`, or
-`REINS_ROS_MCP_CMD` pointing at an installed `ros-mcp`). Results go to `results/realtime/`, and the leaderboard
-shows them in their own table with their own date. What the emulator does and does not model:
-`docs/GRADING-EXISTING-CONNECTORS.md`.
+They are never part of a default run: `python3 -m reins bench --realtime [--repeat 2]` runs all four (about 25
+minutes per repeat; the turtlesim stacks need the Docker CLI with a running Colima). They also need `uvx`, or
+`REINS_ROS_MCP_CMD` pointing at an installed `ros-mcp`. Results go to `results/realtime/`, and the leaderboard
+shows each group in its own table with its own date, the real-ROS one first. What each setup does and does not
+cover: `docs/GRADING-EXISTING-CONNECTORS.md`.
 
 ## Reference limits (the owner's intent)
 
