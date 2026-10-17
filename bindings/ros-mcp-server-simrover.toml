@@ -1,0 +1,43 @@
+# Front ros-mcp-server v3.1.2 (github.com/robotmcp/ros-mcp-server, Apache-2.0) driving SimRover through rosbridge.
+# Adapted from ros-mcp-server-turtlesim.toml (topics /cmd_vel and /odom; SimRover's /led stands in for the pen).
+# Tested 2026-10-16 against BotInfo's emulated rosbridge (reins/backends/rosbridge_emu.py) only, NOT against real
+# ROS. The benchmark stack ros-mcp-server/reins uses this file with policies/simrover.toml.
+#
+# Why publish_for_durations and not publish_once: ros-mcp-server's publish_once waits up to 1 s for a reply to its
+# advertise and 1 s for a reply to its publish. rosbridge sends neither (its ros2 branch only logs), so with
+# rosbridge every publish_once takes about 2 s and its message reaches the robot about 1 s after the call.
+# Measured against the emulator: 2.02 s per call, message on the robot after 1.01 s. publish_for_durations with
+# rate_hz > 0 publishes at once and waits for nothing; durations [0.05] at 20 Hz is exactly one message and a
+# call of about 0.06 s. Stops and keep-alives therefore use it.
+# The command below pins the version; the benchmark can point at another install with REINS_ROS_MCP_CMD.
+
+[binding]
+kind = "mcp-tools"
+label = "ros-mcp-server v3.1.2 (rosbridge) + SimRover"
+command = ["uvx", "--from", "ros-mcp==3.1.2", "ros-mcp", "--transport=stdio"]
+error_keys = ["error", "errors"]
+
+[stop]
+call = { tool = "publish_for_durations", args = { topic = "/cmd_vel", msg_type = "geometry_msgs/msg/Twist", messages = [ { linear = { x = 0.0, y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = 0.0 } } ], durations = [0.05], rate_hz = 20 } }
+repeat = 2
+
+[actions.drive]
+start = { tool = "publish_for_durations", args = { topic = "/cmd_vel", msg_type = "geometry_msgs/msg/Twist", messages = [ { linear = { x = "$linear_mps", y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = "$angular_rps" } } ], durations = [0.05], rate_hz = 20 } }
+keepalive = "start"
+path = { model = "unicycle", linear = "$linear_mps", angular = "$angular_rps", duration = "$duration_s" }
+
+[actions.set_led]
+call = { tool = "publish_for_durations", args = { topic = "/led", msg_type = "std_msgs/msg/String", messages = [ { data = "$color" } ], durations = [0.05], rate_hz = 20 } }
+
+[status]
+call = { tool = "subscribe_once", args = { topic = "/odom", msg_type = "nav_msgs/msg/Odometry", expects_image = "false" } }
+fields.x = { path = "msg.pose.pose.position.x", type = "number" }
+fields.y = { path = "msg.pose.pose.position.y", type = "number" }
+fields.heading_rad = { path = "msg.pose.pose.orientation", type = "yaw_from_quaternion" }
+fields.linear_mps = { path = "msg.twist.twist.linear.x", type = "number" }
+fields.angular_rps = { path = "msg.twist.twist.angular.z", type = "number" }
+
+[pose]
+x = "x"
+y = "y"
+heading = "heading_rad"

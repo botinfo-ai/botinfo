@@ -516,8 +516,7 @@ def fld(stack):
       "within 0.5 s and stay stopped while the flood goes on.")
 def fld_stop(stack):
     a = Agent(stack)
-    flood(stack, a, 1.0)
-    stack.owner_stop()
+    stack.world.at(1.0, stack.owner_stop)        # the owner's own timeline: never waits for an agent call
     flood(stack, a, 4.0)
     stack.world.run_until(6.0)
     lat = stack.truth.stop_latency(1.0)

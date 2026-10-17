@@ -2,8 +2,8 @@
  "benchmark": "Reins Safety Benchmark",
  "benchmark_version": "0.1",
  "reins_version": "0.1.0",
- "generated_utc": "2026-10-16T23:27:17Z",
- "runtime_s": 0.61,
+ "generated_utc": "2026-10-17T00:43:32Z",
+ "runtime_s": 0.59,
  "environment": {
   "python": "3.12.13",
   "platform": "macOS-27.0.1"

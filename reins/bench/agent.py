@@ -84,7 +84,12 @@ class Agent:
 
     def tick(self):
         now = self.world.now()
-        self.behaviours = [b for b in self.behaviours if b(now)]
+        for b in list(self.behaviours):          # in real time the case thread may add one meanwhile
+            if not b(now):
+                try:
+                    self.behaviours.remove(b)
+                except ValueError:
+                    pass
 
     def gone(self):
         self.behaviours = []

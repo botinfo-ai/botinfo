@@ -83,17 +83,27 @@ def build_backend(binding_path, clock):
 def cmd_bench(a) -> int:
     from .bench.report import write
     from .bench.runner import run
-    card = run(stack_ids=a.stack or None, case_ids=set(a.case) if a.case else None,
-               echo=(lambda s: print(s)) if a.verbose else None)
+    from .bench.stacks import ALL_STACKS, REALTIME_STACKS
+    stacks = list(a.stack or [])
+    if a.realtime:
+        stacks += [s for s in REALTIME_STACKS if s not in stacks]
+    unknown = [s for s in stacks if s not in ALL_STACKS]
+    if unknown:
+        return _err(f"unknown stack(s) {unknown}; known: {sorted(ALL_STACKS)}")
+    card = run(stack_ids=stacks or None, case_ids=set(a.case) if a.case else None,
+               echo=(lambda s: print(s, flush=True)) if a.verbose else None, repeat=a.repeat)
     js, md = write(card, a.out)
+    rt = any(s.get("realtime") for s in card["stacks"])
     print(f"Reins Safety Benchmark v{card['benchmark_version']}: {len(card['cases'])} cases x "
-          f"{len(card['stacks'])} stacks in {card['runtime_s']} s (simulated time; mocks and simulators only)\n")
+          f"{len(card['stacks'])} stacks in {card['runtime_s']} s "
+          f"({'real time; third-party connector, emulated middleware, simulator' if rt else 'simulated time'}; "
+          "mocks and simulators only)\n")
     print(f"{'stack':24s} {'layer':6s} {'score':>6s}  critical  controls")
     for s in sorted(card["stacks"], key=lambda s: (-(s["score"] or 0), s["id"])):
         sc = f"{s['score']:.0f}" if s["controls_ok"] and s["score"] is not None else "void"
         print(f"{s['id']:24s} {s['layer']:6s} {sc:>6s}  {s['critical_passed'][0]:>3d}/{s['critical_passed'][1]:<3d}"
               f"    {'ok' if s['controls_ok'] else 'FAILED'}")
-    print(f"\nwrote {js} and {md}")
+    print(f"\nwrote {', '.join(str(j) for j in js)} and {md}")
     errors = sum(s["errors"] for s in card["stacks"])
     return 1 if errors else 0
 
@@ -242,7 +252,12 @@ def main(argv=None) -> int:
     ap.add_argument("--version", action="version", version=f"reins {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("bench", help="run the Reins Safety Benchmark")
-    b.add_argument("--stack", action="append", help="only this stack (repeatable)")
+    b.add_argument("--stack", action="append", help="only this stack (repeatable; real-time stacks too)")
+    b.add_argument("--realtime", action="store_true",
+                   help="run the real-time stacks (third-party connectors as separate processes; minutes, needs "
+                        "uvx or REINS_ROS_MCP_CMD); results go to <out>/realtime/")
+    b.add_argument("--repeat", type=int, default=1,
+                   help="real-time stacks: run each case N times and keep the worst run (default 1)")
     b.add_argument("--case", action="append", help="only this case id (repeatable)")
     b.add_argument("--out", default=str(ROOT / "results"))
     b.add_argument("-v", "--verbose", action="store_true")

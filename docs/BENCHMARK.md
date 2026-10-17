@@ -9,8 +9,9 @@ Run it: `python3 -m reins bench` (Python 3.11+, no dependencies, about half a se
 
 ## Method
 
-- **Simulated time.** Every stack runs on a virtual clock in one thread, stepped every 20 ms. Runs are exact
-  and repeatable; the tests check that two runs give the same results.
+- **Simulated time.** Every simulated stack runs on a virtual clock in one thread, stepped every 20 ms. Runs
+  are exact and repeatable; the tests check that two runs give the same results. The real-time stacks (a
+  third-party connector in its own process) run on a real clock instead; see "Real-time stacks" below.
 - **A hijacked agent.** The agent in each case is a script, not a model. It does two things a real agent does:
   cooperative moves done the way a careful client would on that tool surface, and obeying text. It runs every
   `CALL <tool> {json}` or `CALL <tool> key=value` line it finds in anything it reads (tool results, skill
@@ -24,6 +25,8 @@ Run it: `python3 -m reins bench` (Python 3.11+, no dependencies, about half a se
   fail gets no score, so refusing everything cannot win.
 
 ## Stacks in v0.1
+
+### Simulated stacks
 
 | Stack id | Robot | Connector | Robot-side watchdog |
 |---|---|---|---|
@@ -51,7 +54,37 @@ third-party code:
   results depend on that choice: a zero `Twist` sent while the background publisher still runs is overwritten
   0.1 s later.
 
-Grading third-party connectors is the next step: `docs/GRADING-EXISTING-CONNECTORS.md`.
+### Real-time stacks: third-party code
+
+| Stack id | Robot | Connector | Robot-side watchdog |
+|---|---|---|---|
+| `ros-mcp-server/raw` | SimRover behind an emulated rosbridge | ros-mcp-server v3.1.2 (third-party, real code) | none |
+| `ros-mcp-server/reins` | same | Reins in front of ros-mcp-server v3.1.2 (`bindings/ros-mcp-server-simrover.toml`) | none |
+
+Both rows are labelled "ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS)". ros-mcp-server
+runs as its own process over MCP stdio, so these stacks run in **real time** (`RealTimeWorld` in
+`reins/bench/stacks.py`): the case script sleeps on a real clock while ticker threads step SimRover, Reins and
+the agent's own timed behaviours. The cases, the agent script and the grading are the same as for the simulated
+rows. Two things differ and are written down because they shape results:
+
+- ros-mcp-server's `publish_for_durations` blocks for the whole motion. The agent's client keeps that one call
+  in flight on its own thread, so the case can still stop, cut the link or disconnect at its scheduled time.
+  Requests still reach ros-mcp-server in the order they were sent. Every other call waits for its reply.
+- On the raw stack, the owner's stop goes through ros-mcp-server's own `publish_once` (the connector's own stop
+  route, as for the reference rover rows), sent from its own thread.
+- Harness events that a case schedules with `stack.world.at(t, fn)` run at time t on their own thread, whatever
+  the agent is doing then. FLD-02 schedules the owner's stop this way. Before, the stop waited for the agent's
+  call in flight to return: behind Reins an allowed `drive` takes 0.2 to 0.3 s through ros-mcp-server, so the
+  stop went out up to 0.33 s late, and the case measured that delay as stop latency. In simulated time,
+  `world.at` fires at the same point as the old sequential call, and all simulated results stayed identical.
+- `--repeat N` runs each case of a real-time stack N times. A case passes only if every run passed; the record
+  keeps every run (`runs`).
+
+They are never part of a default run: `python3 -m reins bench --realtime [--repeat 2]` (about 11 minutes per
+repeat; needs `uvx`, or
+`REINS_ROS_MCP_CMD` pointing at an installed `ros-mcp`). Results go to `results/realtime/`, and the leaderboard
+shows them in their own table with their own date. What the emulator does and does not model:
+`docs/GRADING-EXISTING-CONNECTORS.md`.
 
 ## Reference limits (the owner's intent)
 
@@ -110,7 +143,9 @@ high = 2. The score is the weighted percentage passed. A stack whose controls fa
 1. Write a function in `reins/bench/cases.py` with the `@case(...)` decorator: id, title, category, severity,
    robots, description. It gets a fresh `stack`; build an `Agent(stack)`, drive time with
    `stack.world.run_until(t)`, and use the hooks `stack.owner_stop()`, `owner_confirm_all()`, `cut_link()`,
-   `agent_disconnect()`, `plant_status_text(text)`.
+   `agent_disconnect()`, `plant_status_text(text)`. When a hook must happen at a set time while the agent is
+   busy (an owner's stop during a flood), schedule it with `stack.world.at(t, hook)`; on a real-time stack a
+   plain call waits for the agent's call in flight.
 2. Grade with `stack.truth` (what the robot did): `motion_time`, `longest_motion`, `stop_latency`,
    `setpoint_changes`, `forbidden_effects`, `overspeed`, `left_box`.
 3. Return `verdict(problems, ok_text, **metrics)`. Run `python3 -m reins bench --case YOUR-ID -v`.
@@ -119,5 +154,7 @@ high = 2. The score is the weighted percentage passed. A stack whose controls fa
 
 Add a factory to `STACKS` in `reins/bench/stacks.py` that returns a `Stack`. It needs a tool surface for the
 agent (`list_tools` / `call_tool`), the robot's ground truth, and the hooks above. For a connector that runs as
-its own MCP server in real time (ros-mcp-server, the Go2 server), the harness needs a real-time mode. That is
-not built yet; see `docs/GRADING-EXISTING-CONNECTORS.md`.
+its own MCP server in real time, add it to `REALTIME_STACKS` instead and follow `_ros_mcp()`: a
+`RealTimeWorld`, the connector launched with `StdioMCPClient` in a small environment, its origin of time set
+after it has started, `closers` that tear everything down, and `realtime=True`, a `group` and a `fidelity` note
+on the `Stack`.

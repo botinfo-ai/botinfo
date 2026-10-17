@@ -1,23 +1,26 @@
-# DRAFT, UNTESTED: front ros-mcp-server (github.com/robotmcp/ros-mcp-server, Apache-2.0, v3.1.2 read on
-# 2026-10-16) driving turtlesim through rosbridge. Not run: this Mac has no Docker and no ROS.
+# DRAFT, UNTESTED ON TURTLESIM: front ros-mcp-server (github.com/robotmcp/ros-mcp-server, Apache-2.0, v3.1.2)
+# driving turtlesim through rosbridge. Not run: this Mac has no Docker and no ROS. The same pattern IS tested
+# against BotInfo's emulated rosbridge + SimRover: bindings/ros-mcp-server-simrover.toml.
 # Needs: rosbridge_server on ws://127.0.0.1:9090 with turtlesim (their tests/integration/docker/Dockerfile.ros2-humble
 # is headless and multi-arch), and `uvx ros-mcp` available. Use with a turtlesim policy (turtlesim's world is
 # 0..11.09 on both axes, and it moves each Twist for about 1 s, so keep keepalive_s well under 1 s).
-# Tool names and arguments below are from ros-mcp-server's source (ros_mcp/tools/topics.py); the result shapes
-# (and whether failures come back as {"error": ...}) are NOT verified.
+# Stop and drive use publish_for_durations (one message, ~0.06 s per call), not publish_once: publish_once waits
+# 1 s for a reply to advertise and 1 s for a reply to publish, which rosbridge never sends (measured against the
+# emulator: ~2 s per call, message on the robot after ~1 s). Tool names and arguments are from ros-mcp-server's
+# source (ros_mcp/tools/topics.py, services.py); result shapes were checked against the emulator, not turtlesim.
 
 [binding]
 kind = "mcp-tools"
-label = "ros-mcp-server v3.1.2 + rosbridge + turtlesim (UNTESTED DRAFT)"
+label = "ros-mcp-server v3.1.2 + rosbridge + turtlesim (UNTESTED ON TURTLESIM)"
 command = ["uvx", "ros-mcp", "--transport=stdio"]
-error_keys = ["error"]
+error_keys = ["error", "errors"]
 
 [stop]
-call = { tool = "publish_once", args = { topic = "/turtle1/cmd_vel", msg_type = "geometry_msgs/msg/Twist", msg = { linear = { x = 0.0, y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = 0.0 } } } }
+call = { tool = "publish_for_durations", args = { topic = "/turtle1/cmd_vel", msg_type = "geometry_msgs/msg/Twist", messages = [ { linear = { x = 0.0, y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = 0.0 } } ], durations = [0.05], rate_hz = 20 } }
 repeat = 2
 
 [actions.drive]
-start = { tool = "publish_once", args = { topic = "/turtle1/cmd_vel", msg_type = "geometry_msgs/msg/Twist", msg = { linear = { x = "$linear_mps", y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = "$angular_rps" } } } }
+start = { tool = "publish_for_durations", args = { topic = "/turtle1/cmd_vel", msg_type = "geometry_msgs/msg/Twist", messages = [ { linear = { x = "$linear_mps", y = 0.0, z = 0.0 }, angular = { x = 0.0, y = 0.0, z = "$angular_rps" } } ], durations = [0.05], rate_hz = 20 } }
 keepalive = "start"
 path = { model = "unicycle", linear = "$linear_mps", angular = "$angular_rps", duration = "$duration_s" }
 

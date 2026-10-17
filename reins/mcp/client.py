@@ -70,11 +70,15 @@ class StdioMCPClient:
             self._closed = True
             self._cv.notify_all()
 
-    def request(self, method, params=None) -> dict:
+    def request(self, method, params=None, on_sent=None) -> dict:
+        """on_sent: called once the request is on the wire (lets a caller keep a slow call in flight on another
+        thread and still know the order in which requests reached the connector)."""
         with self._lock:
             mid = self._next
             self._next += 1
         self._write({"jsonrpc": "2.0", "id": mid, "method": method, "params": params or {}})
+        if on_sent is not None:
+            on_sent()
         with self._cv:
             ok = self._cv.wait_for(lambda: mid in self._replies or self._closed, timeout=self.timeout_s)
             msg = self._replies.pop(mid, None)
@@ -90,8 +94,8 @@ class StdioMCPClient:
     def list_tools(self) -> list:
         return list(self.tools)
 
-    def call_tool(self, name: str, args: dict) -> dict:
-        res = self.request("tools/call", {"name": name, "arguments": args})
+    def call_tool(self, name: str, args: dict, on_sent=None) -> dict:
+        res = self.request("tools/call", {"name": name, "arguments": args}, on_sent=on_sent)
         payload = res.get("structuredContent")
         if payload is None:
             texts = [c.get("text", "") for c in res.get("content", []) if c.get("type") == "text"]
