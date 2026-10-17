@@ -321,6 +321,8 @@ class Reins:
                         old, self.lease = self.lease, None
                     self.backend.stop()
                     self.audit.write("replaced", old=old["id"] if old else self.busy_action, by=name)
+                if self._stopped_since(gen):         # a stop latched while we waited (e.g. for the replace stop)
+                    return self._deny(name, "stopped", "a stop arrived while the motion was starting")
                 if action.kind == "motion":
                     self.backend.start_motion(action, params)
                     with self._state:
@@ -351,6 +353,13 @@ class Reins:
                 self.audit.write("decision", tool=name, decision="failed", origin=origin, error=str(e))
                 self._backend_failed(e, f"{name}")
                 return {"ok": False, "decision": "failed", "rule": "backend_error", "reason": str(e)}
+
+    def _stopped_since(self, gen) -> bool:
+        """A stop sets stop_gen under _state at once, even while it waits for _io (held by this request). Checking
+        it right before anything is sent keeps a request that was already past the latch check, and then waited
+        (for a slow connector to finish the motion being replaced), from starting a motion after the stop."""
+        with self._state:
+            return self.stop_gen != gen
 
     def _workspace_problem(self, action, params) -> str | None:
         ws = self.policy.workspace

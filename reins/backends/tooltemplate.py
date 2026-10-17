@@ -20,6 +20,9 @@ the topic, the message type or any other field. "$$" at the start of a string st
     [actions.drive]                             # kind = "motion" in the policy
     start = { tool = "publish_once", args = { ..., msg = { linear = { x = "$linear_mps" } } } }
     keepalive = "start"                         # re-send start every keepalive_s, or "none"
+    start_mode = "wait"                         # or "send": put start on the wire and return without its reply,
+                                                # for a connector whose motion tool blocks until the motion ends
+                                                # (unitree-go2-mcp-server); an error reply stops the robot later
     path = { model = "unicycle", linear = "$linear_mps", angular = "$angular_rps", duration = "$duration_s" }
 
     [actions.set_led]                           # kind = "instant" or "oneshot"
@@ -40,6 +43,7 @@ from __future__ import annotations
 
 import copy
 import math
+import threading
 from pathlib import Path
 
 from .base import Backend, BackendError, ToolError
@@ -143,6 +147,10 @@ class ToolTemplateBackend(Backend):
                 if ka not in ("start", "none"):
                     raise BindingError(f"[actions.{name}].keepalive: \"start\" or \"none\"")
                 spec["keepalive"] = ka
+                mode = a.get("start_mode", "wait")
+                if mode not in ("wait", "send"):
+                    raise BindingError(f"[actions.{name}].start_mode: \"wait\" or \"send\"")
+                spec["start_mode"] = mode
                 if "path" in a:
                     p = a["path"]
                     if p.get("model") != "unicycle" or not {"linear", "angular", "duration"} <= set(p):
@@ -165,12 +173,15 @@ class ToolTemplateBackend(Backend):
         if self.pose_map and not all(self.pose_map.get(k) in self.status_fields for k in ("x", "y", "heading")):
             raise BindingError("[pose]: x, y and heading must name [status].fields")
         self._started = False
+        self._sent_errors: list = []
+        self._sent_lock = threading.Lock()
 
     # -------------------------------------------------------------- plumbing
-    def _call(self, spec, params=None) -> dict:
+    def _call(self, spec, params=None, on_sent=None) -> dict:
         args = fill(spec["args"], params or {})
         try:
-            res = self.caller.call_tool(spec["tool"], args)
+            res = (self.caller.call_tool(spec["tool"], args) if on_sent is None else
+                   self.caller.call_tool(spec["tool"], args, on_sent=on_sent))
         except ToolError as e:
             raise BackendError(f"{spec['tool']}: {e}") from None
         if isinstance(res, dict):
@@ -178,6 +189,30 @@ class ToolTemplateBackend(Backend):
                 if res.get(k):
                     raise BackendError(f"{spec['tool']}: {str(res[k])[:200]}")
         return res if isinstance(res, dict) else {"result": res}
+
+    def _send(self, spec, params, wait_s: float = 2.0):
+        """start_mode = "send": put the call on the wire and return without its reply. The connector still gets
+        every call in order. A failed reply is kept and raised at the next start or tick, so Reins stops."""
+        self._raise_sent_errors()
+        sent = threading.Event()
+
+        def go():
+            try:
+                self._call(spec, params, on_sent=sent.set)
+            except BackendError as e:
+                with self._sent_lock:
+                    self._sent_errors.append(e)
+            finally:
+                sent.set()
+        threading.Thread(target=go, name="reins-send", daemon=True).start()
+        sent.wait(wait_s)
+        self._raise_sent_errors()
+
+    def _raise_sent_errors(self):
+        with self._sent_lock:
+            errs, self._sent_errors = self._sent_errors, []
+        if errs:
+            raise errs[0]
 
     def start(self):
         if not self._started:
@@ -213,7 +248,11 @@ class ToolTemplateBackend(Backend):
     # -------------------------------------------------------------- Backend
     def start_motion(self, action, params):
         self.start()
-        self._call(self.actions[action.name]["start"], params)
+        spec = self.actions[action.name]
+        if spec.get("start_mode") == "send":
+            self._send(spec["start"], params)
+        else:
+            self._call(spec["start"], params)
 
     def keepalive(self, action, params):
         spec = self.actions[action.name]
@@ -280,6 +319,7 @@ class ToolTemplateBackend(Backend):
 
 
     def tick(self):
+        self._raise_sent_errors()
         t = getattr(self.caller, "tick", None)
         if t:
             t()

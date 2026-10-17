@@ -9,9 +9,12 @@ simrover.RosStyleConnector). They model how existing connectors expose robots; t
 
 REALTIME_STACKS run a real third-party connector as a separate process, so they run in real time
 (RealTimeWorld): the case script sleeps while ticker threads step the simulator, Reins and the agent's
-behaviours. Today that is ros-mcp-server v3.1.2 (github.com/robotmcp/ros-mcp-server, Apache-2.0), launched over
-MCP stdio and pointed at an emulated rosbridge (backends/rosbridge_emu.py) in front of SimRover. Real time is
-not repeatable to the millisecond; results near a deadline can differ between runs.
+behaviours. Today: ros-mcp-server v3.1.2 (github.com/robotmcp/ros-mcp-server, Apache-2.0) over MCP stdio, against
+real ROS 2 + rosbridge + turtlesim in a container (bench/turtlesim.py) and against an emulated rosbridge in front
+of SimRover (backends/rosbridge_emu.py); and unitree-go2-mcp-server at commit e7a6737
+(github.com/lpigeon/unitree-go2-mcp-server, Apache-2.0) with the real ros2 CLI on ROS 2 Humble, in front of a
+stand-in Go2 node in a second container (bench/go2.py). Real time is not repeatable to the millisecond; results
+near a deadline can differ between runs.
 """
 from __future__ import annotations
 
@@ -37,13 +40,12 @@ from ..clock import RealClock, VirtualClock
 from ..core import Reins
 from ..mcp.client import StdioMCPClient
 from ..policy import load_policy
-from .cases import ROVER_NAMES
-from .oracle import RoverTruth, SesameTruth
+from .cases import ROVER_NAMES, stop_variants
+from .oracle import Go2Truth, RoverTruth, SesameTruth
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICIES = ROOT / "policies"
 BINDINGS = ROOT / "bindings"
-ZERO_TWIST = {"linear": {"x": 0.0, "y": 0.0, "z": 0.0}, "angular": {"x": 0.0, "y": 0.0, "z": 0.0}}
 
 
 class World:
@@ -162,13 +164,15 @@ class RealTimeWorld:
 class Surface:
     """What the agent can call. Uniform result: {"ok": bool, ...}.
 
-    background: tool names whose calls the agent's client keeps in flight on their own thread instead of waiting
-    (real-time stacks only). ros-mcp-server's publish_for_durations blocks for the whole motion; the case still
-    has to cut the link or stop at its scheduled time. Requests still reach the connector in the order sent."""
+    background: tool names (or a function (name, args) -> bool) whose calls the agent's client keeps in flight on
+    their own thread instead of waiting (real-time stacks only). ros-mcp-server's publish_for_durations, and
+    unitree-go2-mcp-server's timed pub_wirelesscontroller and named moves, block for the whole motion; the case
+    still has to cut the link or stop at its scheduled time. Requests still reach the connector in the order sent."""
 
     def __init__(self, target, is_reins: bool, background=()):
         self.target, self.is_reins = target, is_reins
-        self.background = set(background)
+        names = set(() if callable(background) else background)
+        self.in_flight = background if callable(background) else (lambda name, args: name in names)
         self.background_log: list = []
         self.disconnected = False
 
@@ -180,7 +184,7 @@ class Surface:
             return {"ok": False, "error": "agent disconnected"}
         if self.is_reins:
             return self.target.call_tool(name, args)
-        if name in self.background:
+        if self.in_flight(name, args):
             return self._in_flight(name, args)
         try:
             return {"ok": True, "result": self.target.call_tool(name, args)}
@@ -253,11 +257,7 @@ class Stack:
         """The owner's software stop. Behind Reins: the owner channel. Raw: the connector's own stop route."""
         if self.reins is not None:
             return self.reins.owner_stop("benchmark owner stop")
-        if self.robot == "sesame":
-            name, args = "send_command", {"command": "stop"}
-        else:
-            name, args = "publish_once", {"topic": (self.names or ROVER_NAMES)["cmd_vel"],
-                                          "msg_type": "geometry_msgs/msg/Twist", "msg": ZERO_TWIST}
+        name, args = stop_variants(self.robot, self.names or ROVER_NAMES)[0]
         if self.realtime:                # the owner is not the agent: their stop must not wait in the script
             sent = threading.Event()
 
@@ -561,7 +561,94 @@ def _ros_mcp_turtlesim(stack_id: str, with_reins: bool) -> Stack:
                  closers=closers)
 
 
+# -------------------------------------------------------------------- real time: unitree-go2-mcp-server (third-party)
+GO2_GROUP = "unitree-go2-mcp-server-e7a6737-ros2-humble-standin"
+GO2_LABEL = "unitree-go2-mcp-server (commit e7a6737) + ros2 CLI on ROS 2 Humble, stand-in Go2"
+GO2_NAMED_MOVES = ("stand_up_from_a_fall", "stretch", "shake_hands", "love", "pounce", "jump_forward", "sit_down",
+                   "greet", "dance")
+
+
+def _go2_blocks(name, args) -> bool:
+    """The server's calls that block for a whole motion: a timed pub_wirelesscontroller and the named moves."""
+    if name in GO2_NAMED_MOVES:
+        return True
+    if name == "pub_wirelesscontroller" and isinstance(args, dict):
+        d = args.get("duration", 0)
+        return isinstance(d, (int, float)) and not isinstance(d, bool) and d > 0
+    return False
+
+
+def _go2_config(stick_timeout_s: float) -> str:
+    return (f"stand-in centres the sticks {stick_timeout_s:g} s after the last message" if stick_timeout_s
+            else "stand-in holds the last joystick input (no robot-side timeout)")
+
+
+def _go2_fidelity(img: dict) -> str:
+    return ("Real unitree-go2-mcp-server code at commit e7a6737 (unmodified; mcp 1.7.1 from its uv.lock) over MCP "
+            "stdio, and the real ros2 CLI it runs for every command, on ROS 2 Humble with CycloneDDS "
+            f"({'; '.join(img['versions'])}). Two local containers ({img['image']}, Colima on macOS arm64) on a "
+            "private network stand for the PC and the robot, fresh for every case. The robot is NOT a Go2 or a Go2 "
+            "simulator: it is BotInfo's stand-in node that takes the server's /wirelesscontroller messages, uses "
+            "the server's own scale (3.7 m/s or rad/s at full stick), changes speed instantly and records named "
+            "moves as button presses without acting them out. Ground truth comes from that node, never from the "
+            "connector. How a real Go2 treats this topic, and whether it holds the last input, is not known to us; "
+            "both behaviours are graded. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.")
+
+
+def _go2(stack_id: str, with_reins: bool, stick_timeout_s: float) -> Stack:
+    from . import go2
+    img = go2.ensure_image()
+    w = RealTimeWorld()
+    link = Link()
+    closers = []
+    pair = robot = None
+    try:
+        pair = go2.Go2Pair()
+        robot = go2.Go2Robot(w, pair, stick_timeout_s)
+        keep = os.environ.get("REINS_BENCH_LOGS")
+        workdir = Path(tempfile.mkdtemp(prefix="reins-go2mcp-", dir=keep or None))
+        err = open(workdir / "go2-mcp-server.stderr.log", "w")
+        closers.append(err.close)
+        if not keep:
+            closers.append(lambda: shutil.rmtree(workdir, ignore_errors=True))
+        client = go2.ContainerMCPClient(pair, timeout_s=15.0, stderr=err)
+        closers.insert(0, lambda: _kill(client))
+        if with_reins:
+            backend = ToolTemplateBackend(client, load_binding(BINDINGS / "unitree-go2-mcp-server.toml"))
+            reins = Reins(load_policy(POLICIES / "go2.toml"), backend, clock=w.clock, audit=AuditLog(clock=w.clock))
+            w.tickers.append(reins.tick)
+            surface = Surface(reins, True)
+        else:
+            reins, surface = None, Surface(client, False, background=_go2_blocks)
+    except BaseException:
+        _teardown(w, closers + [c.close for c in (robot, pair) if c is not None])
+        raise
+    closers += [robot.close, pair.close]   # the containers go last
+    w.t0 = w.clock.now()                   # the case's time 0 is now, after everything has started
+    robot.start_record()
+    w.start()
+    cfg = _go2_config(stick_timeout_s)
+    info = {"server": client.server_info, "commit": go2.COMMIT, "tools": len(client.tools)}
+    ros = {"image": img["image"], "image_id": img["id"], "packages": img["versions"]}
+    short = (f"centres the sticks {stick_timeout_s:g} s after the last message" if stick_timeout_s
+             else "holds the last joystick input")
+    label = ("Reins -> " if with_reins else "") + f"{GO2_LABEL} that {short}"
+    return Stack(id=stack_id, label=label, robot="rover", layer="reins" if with_reins else "raw", robot_config=cfg,
+                 connector_label=f"unitree-go2-mcp-server {go2.COMMIT} (third-party)", reference=False, world=w,
+                 surface=surface, truth=Go2Truth(robot, w, cmd_topic=go2.CMD_TOPIC), link=link, reins=reins,
+                 connector=client, rover=robot, realtime=True, group=GO2_GROUP, fidelity=_go2_fidelity(img),
+                 names=go2.NAMES, on_cut=pair.cut_link,
+                 extras=_extras(w, surface, {"connector": info, "ros": ros,
+                                             "standin": lambda: {"stick_timeout_s": stick_timeout_s,
+                                                                 "timeouts": robot.watchdog_stops}}),
+                 closers=closers)
+
+
 REALTIME_STACKS = {
+    "go2-hold/raw": lambda: _go2("go2-hold/raw", False, 0.0),
+    "go2-hold/reins": lambda: _go2("go2-hold/reins", True, 0.0),
+    "go2-timeout/raw": lambda: _go2("go2-timeout/raw", False, 0.5),
+    "go2-timeout/reins": lambda: _go2("go2-timeout/reins", True, 0.5),
     "ros-mcp-server-turtlesim/raw": lambda: _ros_mcp_turtlesim("ros-mcp-server-turtlesim/raw", False),
     "ros-mcp-server-turtlesim/reins": lambda: _ros_mcp_turtlesim("ros-mcp-server-turtlesim/reins", True),
     "ros-mcp-server-emu/raw": lambda: _ros_mcp_emulated("ros-mcp-server-emu/raw", False),

@@ -70,3 +70,7 @@ refused, never clamped. Any action call may also carry `request_id` (a repeat is
   only fields the agent will see, each with a type; anything else is redacted. `[pose]` enables the
   workspace check. Full example: `bindings/simrover-ros-style.toml`. Format reference:
   `reins/backends/tooltemplate.py`.
+- A motion's `start_mode = "send"` is for a connector whose motion tool blocks until the motion ends
+  (`bindings/unitree-go2-mcp-server.toml`). Reins puts the start call on the wire and returns at once, so the
+  agent's and the owner's stop still reach Reins at once and latch. The connector gets every call in order, so
+  that stop reaches the robot only once the running motion ends. A failed reply stops the robot at the next tick.

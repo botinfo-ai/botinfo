@@ -66,7 +66,9 @@ Out of scope for v0 (stated, not solved):
   TTL, stop behaviour, workspace. Portable: the same policy can sit in front of different connectors.
 - **Binding** (`bindings/*.toml`): how each policy action becomes calls on one connector. For an MCP connector
   it is a template per action (`start`, `stop`, keep-alive). Placeholders are whole values (`"$linear_mps"`),
-  filled with already-checked numbers or list items, never spliced into strings.
+  filled with already-checked numbers or list items, never spliced into strings. Reins can only be as quick as
+  the connector under it: if the connector handles one call at a time and a motion call blocks until the motion
+  ends (unitree-go2-mcp-server), a stop is latched at once but reaches the robot only after that call returns.
 - **Backends** in this repo: a mock of the Sesame firmware's HTTP API (from BotInfo's sesame-kit), and SimRover,
   a small 2D mobile-robot simulator with a connector shaped like ros-mcp-server's generic tools.
 

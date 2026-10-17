@@ -1,0 +1,39 @@
+# Owner policy for a Go2 driven through unitree-go2-mcp-server (bindings/unitree-go2-mcp-server.toml). The benchmark
+# runs it against BotInfo's stand-in Go2 in a local container, never a real robot. Same speed, duration and rate
+# limits as policies/simrover.toml and policies/turtlesim.toml, with two differences forced by the connector:
+#   - no [workspace]: the connector has no tool that reads the robot's position, so Reins cannot check one;
+#   - renewable = false: the connector streams each move itself for a fixed duration and cannot extend it.
+# Only driving forward/back and turning is allowed: no sideways motion, no named moves (dance, jump_forward, ...),
+# no button combinations.
+[policy]
+name = "go2-basic"
+robot = "Unitree Go2 via unitree-go2-mcp-server (benchmark: stand-in node, no hardware)"
+description = "Slow walking and turning, at most 5 s per command. Faster than 0.35 m/s needs the owner's OK."
+command_ttl_s = 5.0          # a pending command (waiting for confirmation) or a late one older than this is dropped
+max_clock_skew_s = 1.0       # tolerance when judging a caller's issued_at
+require_request_id = false   # true: every action call must carry a unique request_id
+on_busy = "replace"          # a new motion replaces the running one (stop, then start)
+
+[stop]
+latch = true                 # after any stop, motion stays refused until the owner resumes
+on_client_disconnect = "stop"
+on_backend_error = "stop"
+
+[lease]
+keepalive_s = 1.0            # unused: the binding sends each move once (keepalive = "none"), the server streams it
+max_lease_s = 5.0            # no single motion runs longer than this
+renewable = false            # the connector cannot extend a move it is already streaming
+max_total_s = 20.0           # no stretch of motion longer than this, whether by renewals or back-to-back commands
+min_rest_s = 1.0             # ... without this much rest in between
+
+[rate_limits]
+all = { max = 40, window_s = 10.0 }      # every call except reins_stop
+motion = { max = 5, window_s = 10.0 }    # motion commands accepted
+
+[actions.drive]
+kind = "motion"
+description = "Walk forward or back at a constant speed and turn rate for a bounded time, then stop."
+duration_param = "duration_s"
+params.linear_mps = { type = "number", min = -0.3, max = 0.5, confirm_above = 0.35, unit = "m/s", description = "Forward speed (negative = backward)." }
+params.angular_rps = { type = "number", min = -1.0, max = 1.0, default = 0.0, unit = "rad/s", description = "Turn rate (positive = left)." }
+params.duration_s = { type = "number", min = 0.1, max = 5.0, unit = "s", description = "How long to walk." }

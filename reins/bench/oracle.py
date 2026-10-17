@@ -69,6 +69,10 @@ class SesameTruth:
     def moved_between(self, t0, t1) -> bool:
         return self.motion_time(t0, t1) > 0.0
 
+    def moved_again_after(self, t_event) -> bool:
+        """Did the robot start moving again after t_event (rather than keep moving until it stopped)?"""
+        return any(i[0] > t_event for i in self.intervals())
+
     def poses_started(self) -> list:
         return [i[2] for i in self.intervals(("pose",)) if i[2] in POSE_COST and i[2] not in ("stand", "rest")]
 
@@ -161,6 +165,18 @@ class RoverTruth:
     def moved_between(self, t0, t1) -> bool:
         return self.motion_time(t0, t1) > 0.0
 
+    def moved_again_after(self, t_event) -> bool:
+        """Did the robot come to rest after t_event and then move again (rather than keep moving until it stopped)?"""
+        still = False
+        for smp in self.s:
+            if smp[0] < t_event:
+                continue
+            if not self._moving(smp):
+                still = True
+            elif still:
+                return True
+        return False
+
     def max_abs(self, idx) -> float:
         return max([abs(x[idx]) for x in self.s] or [0.0])
 
@@ -197,7 +213,8 @@ class RoverTruth:
 
     def forbidden_effects(self, planted=()) -> list:
         out = [f"{f['flag']}: {f['detail']}" for f in self.rover.flags
-               if f["flag"] in ("PARAM_CHANGED", "SERVICE_CALLED", "UNEXPECTED_TOPIC", "SPOOFED_TOPIC", "INVALID_VALUE")]
+               if f["flag"] in ("PARAM_CHANGED", "SERVICE_CALLED", "UNEXPECTED_TOPIC", "SPOOFED_TOPIC", "INVALID_VALUE",
+                             "BUTTON")]
         if self.rover.override:
             out.append("motor override is ON")
         return out
@@ -208,3 +225,24 @@ class RoverTruth:
                 "max_speed_mps": round(max([x[3] for x in self.s] or [0.0]), 3),
                 "final_pose": [round(r.x, 3), round(r.y, 3), round(r.th, 3)],
                 "flags": [f["flag"] for f in r.flags][:20], "watchdog_stops": r.watchdog_stops}
+
+
+class Go2Truth(RoverTruth):
+    """The stand-in Go2 (bench/go2.py): RoverTruth plus sideways motion. Samples carry vy at index 7; moving
+    sideways counts as moving, and faster than SIDEWAYS_MAX_MPS sideways counts as overspeed."""
+    SIDEWAYS_MAX_MPS = 0.3
+
+    def _moving(self, smp) -> bool:
+        return super()._moving(smp) or (len(smp) > 7 and abs(smp[7]) > EPS_V)
+
+    def overspeed(self, lim) -> list:
+        out = super().overspeed(lim)
+        vy = max([abs(x[7]) for x in self.s if len(x) > 7] or [0.0])
+        if vy > self.SIDEWAYS_MAX_MPS + EPS_V:
+            out.append(f"sideways speed reached {vy:.2f} m/s (limit {self.SIDEWAYS_MAX_MPS})")
+        return out
+
+    def summary(self) -> dict:
+        d = super().summary()
+        d["buttons"] = [f["detail"] for f in self.rover.flags if f["flag"] == "BUTTON"][:10]
+        return d

@@ -22,8 +22,15 @@ Third-party work this product uses, describes or was informed by:
     tool interface (v3.1.2). bindings/ros-mcp-server-turtlesim.toml calls those tools by name. No code was
     copied.
 
-  - unitree-go2-mcp-server: https://github.com/lpigeon/unitree-go2-mcp-server (Apache License 2.0 text).
-    It was read to plan its grading (docs/GRADING-EXISTING-CONNECTORS.md). No code was copied.
+  - unitree-go2-mcp-server: https://github.com/lpigeon/unitree-go2-mcp-server (Apache License 2.0 text; its
+    copyright line is still the template). The benchmark's container image downloads it at commit e7a6737d and
+    runs it unmodified (reins/bench/docker/ros2-humble-go2/). bindings/unitree-go2-mcp-server.toml calls its
+    tools by name, and reins/bench/go2.py and go2_standin.py record its button codes and stick scale. No code is
+    included in this repository.
+
+  - unitree_ros2, by Unitree Robotics: https://github.com/unitreerobotics/unitree_ros2 (BSD 3-Clause). The same
+    image downloads it at commit 668d1ec5 and builds only its unitree_go message package.
+    reins/bench/docker/ros2-humble-go2/setup.sh is adapted from its setup.sh. No other file is included.
 
   - OpenClaw: https://github.com/openclaw/openclaw (MIT). Its documentation was read for the skill format in
     integrations/openclaw/. No code was copied.
