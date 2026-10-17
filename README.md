@@ -14,7 +14,8 @@ behind Reins, on what the robot actually did.
 
 ## Quickstart (one command)
 
-From this folder, with Python 3.11 or newer and nothing to install:
+From this folder, with Python 3.11 or newer and nothing to install (on an older Python, Reins says so in one line
+and stops; macOS's built-in `python3` is 3.9, so use one from python.org or `uv`):
 
 ```bash
 python3 -m reins bench
@@ -25,7 +26,7 @@ It runs 20 cases against 8 stacks in simulated time (about a second) and writes 
 
 ```bash
 python3 -m reins demo                                  # a short scripted session, printed
-python3 -m unittest discover -s tests -t tests         # 51 tests, about 5 s
+python3 -m unittest discover -s tests -t tests         # about 80 tests, about 10 s
 ```
 
 ## What Reins enforces
@@ -59,7 +60,38 @@ Threat model and architecture: [docs/DESIGN.md](docs/DESIGN.md). Policy referenc
 ## The benchmark, v0.1 results
 
 The full table, every case, and why each failure failed: [results/LEADERBOARD.md](results/LEADERBOARD.md).
-Method and cases: [docs/BENCHMARK.md](docs/BENCHMARK.md).
+Method and cases: [docs/BENCHMARK.md](docs/BENCHMARK.md). What each grading setup does and leaves out:
+[docs/GRADING-EXISTING-CONNECTORS.md](docs/GRADING-EXISTING-CONNECTORS.md).
+
+**Third-party connectors, real code on real ROS 2 middleware** (in local containers, real time, every case run
+twice). None of these is a robot:
+
+| Stack | Score | Critical cases passed |
+|---|---|---|
+| Reins → ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble | 100 | 10/10 |
+| ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble, direct | 11 | 1/10 (link lost, thanks to turtlesim's own stop) |
+| Reins → unitree-go2-mcp-server (e7a6737) + ros2 CLI, stand-in Go2 that centres the sticks 0.5 s after the last message | 68 | 6/10 |
+| unitree-go2-mcp-server (e7a6737) + ros2 CLI, same stand-in, direct | 18 | 2/10 |
+| Reins → unitree-go2-mcp-server, stand-in Go2 that holds the last joystick input | void | 5/10 (CTL-01 fails) |
+| unitree-go2-mcp-server, same stand-in, direct | void | 1/10 (CTL-01 fails) |
+
+- **ros-mcp-server** runs against turtlesim, a simulator that stops by itself 1 s after the last command; behind
+  Reins, the lost-link pass is that watchdog at work, not Reins'. Direct, ros-mcp-server runs one tool call at a time,
+  and each `publish_once` takes about 2 s because it waits for replies rosbridge never sends (rosbridge 2.0.8), so a
+  stop sent during `publish_for_durations` waits for that call to end.
+- **unitree-go2-mcp-server** drives a **stand-in Go2 node, not a Go2 and not a Go2 simulator** (Unitree's MuJoCo
+  simulator cannot act on the joystick messages this server sends). Every command is a new `ros2 topic pub` process,
+  and the server handles one call at a time, so no stop can interrupt a running move, behind Reins or not: Reins
+  latches the stop at once, but the robot stopped 4.2 s later, when the move ended. Behind Reins every case about
+  what may be sent passed; the workspace case fails because the server reads no position. Whether a real Go2 holds
+  or centres the last joystick input is unknown to us, so both are graded. With the holding stand-in each move
+  overruns by about 1.1 s (the server's closing stop is a second process), the CTL-01 control fails, and those rows
+  have no score.
+- An earlier grade of ros-mcp-server against BotInfo's emulated rosbridge (not real ROS) is kept on the leaderboard:
+  93 behind Reins, 4 direct.
+
+**BotInfo's reference stacks, simulated time** (the direct connectors are BotInfo's models of existing patterns,
+not third-party code):
 
 | Stack | Score | Critical cases passed |
 |---|---|---|
@@ -72,31 +104,12 @@ Method and cases: [docs/BENCHMARK.md](docs/BENCHMARK.md).
 | Sesame firmware API (mock, stock), direct | 12 | 1/9 |
 | ROS-style connector → SimRover, no watchdog, direct | 0 | 0/10 |
 
-Third-party code, in real time: **ros-mcp-server v3.1.2**, its real code launched as its own process. The
-authoritative grade runs it on **real ROS 2 Humble + rosbridge + turtlesim in a local container**. turtlesim is a
-simulator that stops by itself 1 s after the last command. An earlier grade against BotInfo's emulated rosbridge
-in front of SimRover (no watchdog) is kept, labelled as such:
-
-| Stack | Score | Critical cases passed |
-|---|---|---|
-| Reins → ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble (in a container) | 100 | 10/10 |
-| ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble (in a container), direct | 11 | 1/10 (link lost, thanks to turtlesim's own stop) |
-| Reins → ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS) | 93 | 9/10 (link lost) |
-| ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS), direct | 4 | 0/10 |
-
-Behind Reins, the lost-link pass on turtlesim is turtlesim's watchdog at work, not Reins'. Direct, ros-mcp-server
-runs one tool call at a time, and each `publish_once` takes about 2 s because it waits for replies rosbridge
-never sends (measured on rosbridge 2.0.8). So a stop sent during `publish_for_durations` waits for that call to
-end. Details and what each setup leaves out: [docs/GRADING-EXISTING-CONNECTORS.md](docs/GRADING-EXISTING-CONNECTORS.md).
-
 Read these numbers with three things in mind:
 
-1. **Every row is a simulator or a mock.** The direct connectors above are BotInfo's reference models of
-   existing patterns: a direct firmware API, and a generic ROS connector shaped like ros-mcp-server. One
-   third-party connector has been graded so far, in real time: **ros-mcp-server v3.1.2**, on real ROS 2 Humble
-   with turtlesim (a simulator) in a container, and also against BotInfo's emulated rosbridge. Its rows, and what
-   each setup leaves out, are in
-   [results/LEADERBOARD.md](results/LEADERBOARD.md) and
+1. **Every row is a simulator, a mock or a stand-in robot node.** Two third-party connectors have been graded
+   so far, as real code on real ROS 2 middleware in containers: ros-mcp-server v3.1.2 (on turtlesim) and
+   unitree-go2-mcp-server (on BotInfo's stand-in Go2). The other rows grade BotInfo's reference models of existing
+   patterns. What each setup leaves out is in
    [docs/GRADING-EXISTING-CONNECTORS.md](docs/GRADING-EXISTING-CONNECTORS.md).
 2. **Reins and the benchmark were written together, by the same team.** Reins passing its authors' tests proves
    little. The benchmark gets useful when someone adds a case Reins fails; see "Adding a case" in
@@ -127,7 +140,8 @@ Reins is an MCP server on stdio. For Claude Code, put this in a project `.mcp.js
 That is the same arrangement as fronting ros-mcp-server: `bindings/ros-mcp-server-turtlesim.toml` (with
 `policies/turtlesim.toml`) is tested on real ROS 2 Humble + rosbridge + turtlesim in a container, and
 `bindings/ros-mcp-server-simrover.toml` against the emulated rosbridge (not real ROS). For the Sesame mock, use `policies/sesame.toml` with
-`bindings/sesame-inprocess.toml`.
+`bindings/sesame-inprocess.toml`. `bindings/unitree-go2-mcp-server.toml` (with `policies/go2.toml`) fronts
+unitree-go2-mcp-server; it has only been run against BotInfo's stand-in Go2 node in a container, never a robot.
 
 While it runs, the owner uses a local socket (`~/.reins/<policy>.sock`, owner-only permissions):
 
@@ -155,6 +169,11 @@ been loaded into OpenClaw.
 
 - It does not make a robot physically harmless. It cannot see people, obstacles, falls or battery faults.
 - It cannot stop a robot it can no longer reach. Only the robot's own watchdog or hardware stop can do that.
+- It cannot make a connector faster than it is. If the connector handles one call at a time and a motion call
+  blocks until the motion ends (unitree-go2-mcp-server does both), Reins latches a stop at once and refuses all
+  motion after it, but the stop reaches the robot only when the running call returns.
+- It can only enforce what the connector lets it see. A workspace limit needs a pose; a connector that reports no
+  position (unitree-go2-mcp-server) leaves Reins with speed, duration and rate limits only.
 - It does not protect against an agent that has a shell on the owner's account. That agent could kill Reins,
   edit the policy or reach the robot directly. Give the agent the Reins MCP server and nothing else that
   touches the robot.
@@ -181,6 +200,7 @@ reins/mcp/                 MCP server and client (stdio, standard library only)
 reins/owner.py             the owner's local channel (Unix socket)
 reins/backends/            Sesame firmware API + mock, SimRover + reference ROS-style connector, MCP tool templates
 reins/bench/               the Reins Safety Benchmark (cases, stacks, ground truth, report)
+reins/bench/docker/        container images for the real-ROS grades (turtlesim; Go2 server + stand-in robot)
 policies/  bindings/       example owner policies and connector bindings
 docs/                      DESIGN, BENCHMARK, POLICY, GRADING-EXISTING-CONNECTORS
 results/                   the published v0.1 benchmark run
@@ -193,3 +213,5 @@ tests/                     unittest suite
 Apache-2.0 ([LICENSE](LICENSE)); credits are in [NOTICE](NOTICE). The Sesame robot and firmware are Dorian
 Todd's work (Apache-2.0). Reins is an independent BotInfo.ai project, not made or endorsed by him. The reference
 ROS-style connector follows the tool interface of ros-mcp-server (Contoro Inc., Apache-2.0); no code was copied.
+The Go2 grade runs unitree-go2-mcp-server (Apache-2.0) unmodified inside a container image; it is not included
+here.

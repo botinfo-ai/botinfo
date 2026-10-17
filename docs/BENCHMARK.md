@@ -62,6 +62,10 @@ third-party code:
 | `ros-mcp-server-turtlesim/reins` | same | Reins in front of ros-mcp-server (`bindings/ros-mcp-server-turtlesim.toml`, `policies/turtlesim.toml`) | same |
 | `ros-mcp-server-emu/raw` | SimRover behind BotInfo's emulated rosbridge (not real ROS) | ros-mcp-server v3.1.2 (third-party, real code) | none |
 | `ros-mcp-server-emu/reins` | same | Reins in front of ros-mcp-server (`bindings/ros-mcp-server-simrover.toml`) | none |
+| `go2-hold/raw` | BotInfo's stand-in Go2 node (not a Go2, not a Go2 simulator) across a container network, real ROS 2 Humble + CycloneDDS | unitree-go2-mcp-server at commit e7a6737 (third-party, real code, unmodified) and the real `ros2` CLI it runs | none: the stand-in holds the last joystick input |
+| `go2-hold/reins` | same | Reins in front of it (`bindings/unitree-go2-mcp-server.toml`, `policies/go2.toml`) | same |
+| `go2-timeout/raw` | same | unitree-go2-mcp-server at commit e7a6737 | the stand-in centres the sticks 0.5 s after the last message |
+| `go2-timeout/reins` | same | Reins in front of it | same |
 
 The turtlesim rows are the authoritative grade. They are labelled "ros-mcp-server v3.1.2 + rosbridge + turtlesim
 on real ROS 2 Humble (in a container)", and each case gets a fresh container (`reins/bench/turtlesim.py`; the
@@ -69,16 +73,31 @@ image is built from `reins/bench/docker/ros2-humble-turtlesim/`). The emulated r
 v3.1.2 against an emulated rosbridge (not real ROS)". On turtlesim the cases use turtlesim's names
 (`turtlesim.NAMES` in place of `cases.ROVER_NAMES`); `docs/GRADING-EXISTING-CONNECTORS.md` lists them.
 
+The Go2 rows are labelled "unitree-go2-mcp-server (commit e7a6737) + ros2 CLI on ROS 2 Humble, stand-in Go2". Each
+case gets a fresh pair of containers on a private network with no route out (`reins/bench/go2.py`; the image is
+built from `reins/bench/docker/ros2-humble-go2/`): the "pc" runs the server's code and the `ros2` CLI, the "robot"
+runs the stand-in. The server's raw tools are a joystick, not ROS topics, so the cases speak a joystick dialect
+(`go2.NAMES`, `surface = "joystick"`): a timed move is `pub_wirelesscontroller(linear_x, 0, yaw, 0, keys=0,
+duration)`, a single command is the same with `duration = 0`, the stop is its `stop` tool, the status read is
+`get_topics` (its only read), and the injection, skill and unknown-action payloads use its tool names (named moves,
+a button combination it does not name). A button combination that reaches the robot is a forbidden effect, like a
+parameter change on the rover. How a real Go2 treats this topic, and whether it holds the last joystick input, is
+unknown to us, so the stand-in runs both ways (the `go2-hold` and `go2-timeout` rows).
+
 ros-mcp-server runs as its own process over MCP stdio, so these stacks run in **real time** (`RealTimeWorld` in
 `reins/bench/stacks.py`): the case script sleeps on a real clock while ticker threads step the simulator, Reins
 and the agent's own timed behaviours. The cases, the agent script and the grading are the same as for the
 simulated rows. Some things differ and are written down because they shape results:
 
-- ros-mcp-server's `publish_for_durations` blocks for the whole motion. The agent's client keeps that one call
-  in flight on its own thread, so the case can still stop, cut the link or disconnect at its scheduled time.
-  Requests still reach ros-mcp-server in the order they were sent. Every other call waits for its reply.
-- On the raw stack, the owner's stop goes through ros-mcp-server's own `publish_once` (the connector's own stop
-  route, as for the reference rover rows), sent from its own thread.
+- ros-mcp-server's `publish_for_durations` blocks for the whole motion, and so do unitree-go2-mcp-server's timed
+  `pub_wirelesscontroller` and its named moves. The agent's client keeps those calls in flight on their own thread,
+  so the case can still stop, cut the link or disconnect at its scheduled time. Requests still reach the connector
+  in the order they were sent. Every other call waits for its reply (up to 15 s).
+- On a raw stack, the owner's stop goes through the connector's own stop route (ros-mcp-server's `publish_once`
+  of a zero Twist; unitree-go2-mcp-server's `stop`), as for the reference rover rows, sent from its own thread.
+- When the agent leaves (LNK-01) on a raw stack, its client closes the connector's stdin, waits 3 s, then kills
+  the connector process (for the Go2 server, its own PID inside the container). Processes it started are left
+  running, as they would be when a host kills a server.
 - Harness events that a case schedules with `stack.world.at(t, fn)` run at time t on their own thread, whatever
   the agent is doing then. FLD-02 schedules the owner's stop this way. Before, the stop waited for the agent's
   call in flight to return: behind Reins an allowed `drive` takes 0.2 to 0.3 s through ros-mcp-server, so the
@@ -87,10 +106,12 @@ simulated rows. Some things differ and are written down because they shape resul
 - `--repeat N` runs each case of a real-time stack N times. A case passes only if every run passed; the record
   keeps every run (`runs`).
 
-They are never part of a default run: `python3 -m reins bench --realtime [--repeat 2]` runs all four (about 25
-minutes per repeat; the turtlesim stacks need the Docker CLI with a running Colima). They also need `uvx`, or
-`REINS_ROS_MCP_CMD` pointing at an installed `ros-mcp`. Results go to `results/realtime/`, and the leaderboard
-shows each group in its own table with its own date, the real-ROS one first. What each setup does and does not
+They are never part of a default run: `python3 -m reins bench --realtime [--repeat 2]` runs all eight (about
+50 minutes per repeat; the turtlesim and Go2 stacks need the Docker CLI with a running Colima, and the Go2 image
+downloads unitree_ros2 and the server's pinned dependencies on its first build). `--stack ID` runs one. The
+ros-mcp-server stacks also need `uvx`, or `REINS_ROS_MCP_CMD` pointing at an installed `ros-mcp`. Results go to `results/realtime/`, and the leaderboard
+shows each group in its own table with its own date: third-party code on real ROS 2 first, then the simulated
+stacks, then the emulated-rosbridge grade. What each setup does and does not
 cover: `docs/GRADING-EXISTING-CONNECTORS.md`.
 
 ## Reference limits (the owner's intent)
