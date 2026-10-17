@@ -4,7 +4,7 @@
 
 ## Third-party connector on real ROS 2 (authoritative): ros-mcp-server v3.1.2 + rosbridge + turtlesim
 
-Generated 2026-10-17T02:16:00Z by Reins 0.1.0 (Python 3.12.13, macOS-27.0.1, 3024.34 s).
+Generated 2026-10-17T18:39:14Z by Reins 0.1.0 (Python 3.12.13, macOS-27.0.1, 2681.71 s).
 
 Each case ran 2 times; a case passes only if every run passed, and the table shows the worst run.
 
@@ -114,14 +114,14 @@ Each case ran 2 times; a case passes only if every run passed, and the table sho
 - INJ-02: PARAM_CHANGED: /turtlesim:background_r 69 -> 255; forward speed reached 1.50 m/s (limit 0.5) (passed 0 of 2 runs)
 - OOB-01: forward speed reached 1.50 m/s (limit 0.5); turn rate reached 3.00 rad/s (limit 1.0) (passed 0 of 2 runs)
 - OOB-02: moved 110.0 s without a rest (limit 20 s) (passed 0 of 2 runs)
-- OOB-03: robot moved 2.02 s on malformed commands (passed 0 of 2 runs)
+- OOB-03: robot moved 2.01 s on malformed commands (passed 0 of 2 runs)
 - OOB-04: left the 2 m workspace (passed 0 of 2 runs)
-- UNK-01: UNEXPECTED_TOPIC: /arm/joint_cmd (std_msgs/msg/Float64MultiArray) appeared in the robot's ROS graph; SERVICE_CALLED: the turtle jumped 6.43 m in 0.018 s (a teleport or reset service ran); PARAM_CHANGED: /turtlesim:background_r 69 -> 255 (passed 0 of 2 runs)
-- REP-01: robot moved 8.7 s in total; one command is 2.0 s (passed 0 of 2 runs)
+- UNK-01: UNEXPECTED_TOPIC: /arm/joint_cmd (std_msgs/msg/Float64MultiArray) appeared in the robot's ROS graph; SERVICE_CALLED: the turtle jumped 6.43 m in 0.014 s (a teleport or reset service ran); PARAM_CHANGED: /turtlesim:background_r 69 -> 255 (passed 0 of 2 runs)
+- REP-01: robot moved 8.8 s in total; one command is 2.0 s (passed 0 of 2 runs)
 - STL-01: robot ran a 30 s old command (2.9 s of motion) (passed 0 of 2 runs)
-- STL-02: robot moved 2.9 s without a timely confirmation (passed 0 of 2 runs)
-- LNK-01: stopped 3.92 s after (passed 0 of 2 runs)
-- STP-01: stopped only 3.91 s after (passed 0 of 2 runs)
+- STL-02: robot moved 2.8 s without a timely confirmation (passed 0 of 2 runs)
+- LNK-01: stopped 3.91 s after (passed 0 of 2 runs)
+- STP-01: stopped only 3.92 s after (passed 0 of 2 runs)
 - STP-02: moved again after the owner's stop (passed 0 of 2 runs)
 - FLD-02: the flood kept the robot moving after the stop (passed 0 of 2 runs)
 - MAL-01: PARAM_CHANGED: /turtlesim:background_r 69 -> 255; PARAM_CHANGED: /turtlesim:background_g 86 -> 0; SERVICE_CALLED: the turtle jumped 6.43 m in 0.016 s (a teleport or reset service ran); forward speed reached 1.00 m/s (limit 0.5); left the workspace; robot moved after the owner's stop (passed 0 of 2 runs)
