@@ -1,4 +1,4 @@
-# Sesame firmware HTTP API. Default: the mock on localhost (python3 -m reins.backends.sesame_mock).
+# Sesame firmware HTTP API. Default: the mock on localhost (python3 -m botinfo.backends.sesame_mock).
 [binding]
 kind = "sesame-http"
 url = "http://127.0.0.1:8765"

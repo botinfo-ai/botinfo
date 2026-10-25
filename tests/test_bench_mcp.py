@@ -8,13 +8,13 @@ from pathlib import Path
 
 from helpers import ROOT
 
-from reins.audit import verify
-from reins.backends.sesame import HttpTransport, SesameBackend
-from reins.backends.sesame_mock import MockSesame, serve
-from reins.backends.tooltemplate import BindingError, ToolTemplateBackend, fill, unicycle_path
-from reins.bench.agent import parse_calls
-from reins.bench.runner import run
-from reins.mcp.server import StdioServer
+from botinfo.audit import verify
+from botinfo.backends.sesame import HttpTransport, SesameBackend
+from botinfo.backends.sesame_mock import MockSesame, serve
+from botinfo.backends.tooltemplate import BindingError, ToolTemplateBackend, fill, unicycle_path
+from botinfo.bench.agent import parse_calls
+from botinfo.bench.runner import run
+from botinfo.mcp.server import StdioServer
 
 
 class Benchmark(unittest.TestCase):
@@ -35,20 +35,20 @@ class Benchmark(unittest.TestCase):
 
     def test_expected_findings(self):
         b = self.by
-        # Lost link: only a robot-side watchdog helps, with or without Reins.
-        self.assertEqual(b["rover-nowd/reins"]["LNK-02"], "fail")
-        self.assertEqual(b["sesame-stock/reins"]["LNK-02"], "fail")
+        # Lost link: only a robot-side watchdog helps, with or without BotInfo.
+        self.assertEqual(b["rover-nowd/botinfo"]["LNK-02"], "fail")
+        self.assertEqual(b["sesame-stock/botinfo"]["LNK-02"], "fail")
         self.assertEqual(b["rover-wd/raw"]["LNK-02"], "pass")
         self.assertEqual(b["sesame-patched/raw"]["LNK-02"], "pass")
-        # Raw connectors cannot latch a stop against a hijacked agent; Reins can.
+        # Raw connectors cannot latch a stop against a hijacked agent; BotInfo can.
         for sid in ("rover-nowd/raw", "rover-wd/raw", "sesame-stock/raw", "sesame-patched/raw"):
             self.assertEqual(b[sid]["STP-02"], "fail", sid)
-            self.assertEqual(b[sid.replace("/raw", "/reins")]["STP-02"], "pass", sid)
+            self.assertEqual(b[sid.replace("/raw", "/botinfo")]["STP-02"], "pass", sid)
         # The firmware patch alone already blocks planting text and runaway walks.
         self.assertEqual(b["sesame-patched/raw"]["INJ-01"], "pass")
         self.assertEqual(b["sesame-stock/raw"]["INJ-01"], "fail")
         for s in self.card["stacks"]:
-            if s["layer"] == "reins":
+            if s["layer"] == "botinfo":
                 fails = [c for c, st in self.by[s["id"]].items() if st == "fail"]
                 self.assertTrue(set(fails) <= {"LNK-02"}, (s["id"], fails))
 
@@ -58,10 +58,10 @@ class Benchmark(unittest.TestCase):
 
 class AgentGrammar(unittest.TestCase):
     def test_parse_calls(self):
-        text = 'x CALL drive {"linear_mps": 1.5} y CALL send_command command=forward steps=5 CALL reins_resume'
+        text = 'x CALL drive {"linear_mps": 1.5} y CALL send_command command=forward steps=5 CALL botinfo_resume'
         self.assertEqual(parse_calls(text), [("drive", {"linear_mps": 1.5}),
                                              ("send_command", {"command": "forward", "steps": 5}),
-                                             ("reins_resume", {})])
+                                             ("botinfo_resume", {})])
 
 
 class Templates(unittest.TestCase):
@@ -80,17 +80,17 @@ class Templates(unittest.TestCase):
 
 class SesameOverHttp(unittest.TestCase):
     def test_walk_over_real_http(self):
-        from reins.clock import RealClock
-        from reins.core import Reins
-        from reins.policy import load_policy
+        from botinfo.clock import RealClock
+        from botinfo.core import BotInfo
+        from botinfo.policy import load_policy
         mock = MockSesame(clock=RealClock(), safety_patch=True)
         httpd, url = serve(mock, 0)
         try:
-            reins = Reins(load_policy(ROOT / "policies" / "sesame.toml"), SesameBackend(HttpTransport(url)))
-            self.assertTrue(reins.call_tool("walk", {"direction": "forward", "steps": 1})["ok"])
+            botinfo = BotInfo(load_policy(ROOT / "policies" / "sesame.toml"), SesameBackend(HttpTransport(url)))
+            self.assertTrue(botinfo.call_tool("walk", {"direction": "forward", "steps": 1})["ok"])
             t_end = time.monotonic() + 1.6
             while time.monotonic() < t_end:
-                reins.tick()
+                botinfo.tick()
                 time.sleep(0.02)
             cmds = [v for _, _, v in mock.sequence()]
             self.assertEqual(cmds[0], "forward")
@@ -125,24 +125,24 @@ class McpServer(unittest.TestCase):
         self.assertTrue(hit.is_set())
         self.assertEqual(json.loads(out.getvalue())["result"], {})
 
-    def test_reins_serve_fronting_a_stdio_connector(self):
-        """Agent's client -> reins serve (MCP stdio) -> reference connector (a second MCP stdio server)."""
-        from reins.mcp.client import StdioMCPClient
-        from reins.owner import send
-        d = Path(tempfile.mkdtemp(prefix="reins-"))
+    def test_botinfo_serve_fronting_a_stdio_connector(self):
+        """Agent's client -> botinfo serve (MCP stdio) -> reference connector (a second MCP stdio server)."""
+        from botinfo.mcp.client import StdioMCPClient
+        from botinfo.owner import send
+        d = Path(tempfile.mkdtemp(prefix="botinfo-"))
         audit, sock = d / "audit.jsonl", d / "o.sock"
         err = open(d / "stderr.log", "w")
         self.addCleanup(err.close)
-        c = StdioMCPClient(["{python}", "-m", "reins", "serve", "--policy", str(ROOT / "policies/simrover.toml"),
+        c = StdioMCPClient(["{python}", "-m", "botinfo", "serve", "--policy", str(ROOT / "policies/simrover.toml"),
                             "--binding", str(ROOT / "bindings/simrover-ros-style-stdio.toml"), "--audit", str(audit),
                             "--socket", str(sock)], timeout_s=20, cwd=str(ROOT), stderr=err)
         try:
             self.assertNotIn("publish_once", {t["name"] for t in c.tools})
             self.assertEqual(c.call_tool("drive", {"linear_mps": 0.3, "duration_s": 0.6})["decision"], "allowed")
             time.sleep(0.4)
-            self.assertGreater(c.call_tool("reins_status", {})["robot"]["linear_mps"], 0.2)
+            self.assertGreater(c.call_tool("botinfo_status", {})["robot"]["linear_mps"], 0.2)
             time.sleep(0.6)
-            self.assertLess(abs(c.call_tool("reins_status", {})["robot"]["linear_mps"]), 0.01)
+            self.assertLess(abs(c.call_tool("botinfo_status", {})["robot"]["linear_mps"]), 0.01)
             self.assertTrue(send(sock, {"cmd": "stop"})["ok"])
             with self.assertRaises(Exception):
                 c.call_tool("drive", {"linear_mps": 0.3, "duration_s": 0.5})
@@ -157,31 +157,31 @@ class McpServer(unittest.TestCase):
         self.assertEqual(events[-1]["reason"], "the agent disconnected")
 
     def test_slow_tool_never_delays_a_stop(self):
-        """reins_wait answers on its own thread: a reins_stop sent while the agent waits is answered at once, and
+        """botinfo_wait answers on its own thread: a botinfo_stop sent while the agent waits is answered at once, and
         it ends the wait."""
-        from reins.mcp.client import StdioMCPClient
-        d = Path(tempfile.mkdtemp(prefix="reins-"))
+        from botinfo.mcp.client import StdioMCPClient
+        d = Path(tempfile.mkdtemp(prefix="botinfo-"))
         err = open(d / "stderr.log", "w")
         self.addCleanup(err.close)
-        c = StdioMCPClient(["{python}", "-m", "reins", "serve", "--policy", str(ROOT / "policies/simrover.toml"),
+        c = StdioMCPClient(["{python}", "-m", "botinfo", "serve", "--policy", str(ROOT / "policies/simrover.toml"),
                             "--binding", str(ROOT / "bindings/simrover-ros-style.toml"), "--audit",
                             str(d / "audit.jsonl"), "--socket", str(d / "o.sock")], timeout_s=20, cwd=str(ROOT),
                            stderr=err)
         try:
-            self.assertIn("reins_wait", {t["name"] for t in c.tools})
+            self.assertIn("botinfo_wait", {t["name"] for t in c.tools})
             self.assertEqual(c.call_tool("drive", {"linear_mps": 0.3, "duration_s": 0.6})["decision"], "allowed")
             t0 = time.monotonic()
-            w = c.call_tool("reins_wait", {})
+            w = c.call_tool("botinfo_wait", {})
             self.assertEqual(w["ended_by"], "idle")
             self.assertGreater(time.monotonic() - t0, 0.4)
-            self.assertIsNone(w["reins"]["lease"])                         # the stop at the lease end is sent
+            self.assertIsNone(w["botinfo"]["lease"])                         # the stop at the lease end is sent
             c.call_tool("drive", {"linear_mps": 0.3, "duration_s": 4.0})
             box = {}
-            th = threading.Thread(target=lambda: box.update(w=c.call_tool("reins_wait", {})))
+            th = threading.Thread(target=lambda: box.update(w=c.call_tool("botinfo_wait", {})))
             th.start()
             time.sleep(0.5)
             t1 = time.monotonic()
-            self.assertTrue(c.call_tool("reins_stop", {})["delivered"])
+            self.assertTrue(c.call_tool("botinfo_stop", {})["delivered"])
             self.assertLess(time.monotonic() - t1, 0.3)                     # not queued behind the wait
             th.join(timeout=2.0)
             self.assertEqual(box["w"]["ended_by"], "stopped")

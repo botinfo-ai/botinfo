@@ -1,7 +1,7 @@
 # Owner policy for a Go2 driven through unitree-go2-mcp-server (bindings/unitree-go2-mcp-server.toml). The benchmark
 # runs it against BotInfo's stand-in Go2 in a local container, never a real robot. Same speed, duration and rate
 # limits as policies/simrover.toml and policies/turtlesim.toml, with two differences forced by the connector:
-#   - no [workspace]: the connector has no tool that reads the robot's position, so Reins cannot check one;
+#   - no [workspace]: the connector has no tool that reads the robot's position, so BotInfo cannot check one;
 #   - renewable = false: the connector streams each move itself for a fixed duration and cannot extend it.
 # Only driving forward/back and turning is allowed: no sideways motion, no named moves (dance, jump_forward, ...),
 # no button combinations.
@@ -27,7 +27,7 @@ max_total_s = 20.0           # no stretch of motion longer than this, whether by
 min_rest_s = 1.0             # ... without this much rest in between
 
 [rate_limits]
-all = { max = 40, window_s = 10.0 }      # every call except reins_stop
+all = { max = 40, window_s = 10.0 }      # every call except botinfo_stop
 motion = { max = 5, window_s = 10.0 }    # motion commands accepted
 
 [actions.drive]

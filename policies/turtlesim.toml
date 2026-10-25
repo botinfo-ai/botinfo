@@ -24,7 +24,7 @@ max_total_s = 20.0           # no stretch of motion longer than this, whether by
 min_rest_s = 1.0             # ... without this much rest in between
 
 [rate_limits]
-all = { max = 40, window_s = 10.0 }      # every call except reins_stop
+all = { max = 40, window_s = 10.0 }      # every call except botinfo_stop
 motion = { max = 5, window_s = 10.0 }    # motion commands accepted
 
 [workspace]

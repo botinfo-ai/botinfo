@@ -1,7 +1,7 @@
 """The emulated rosbridge (backends/rosbridge_emu.py), the real-time harness, and the real-time results files.
 
 The emulator tests use the standard-library client on a free port. The one test that launches the real
-ros-mcp-server needs REINS_ROS_MCP_CMD (e.g. "<venv>/bin/ros-mcp --transport=stdio") and port 9090; it is skipped
+ros-mcp-server needs BOTINFO_ROS_MCP_CMD (e.g. "<venv>/bin/ros-mcp --transport=stdio") and port 9090; it is skipped
 otherwise.
 """
 import json
@@ -13,13 +13,13 @@ import time
 import unittest
 from pathlib import Path
 
-from reins.backends.base import Link
-from reins.backends.rosbridge_emu import RosbridgeEmulator, WebSocketClient, convert
-from reins.backends.simrover import SimRover
-from reins.bench.report import leaderboard, write
-from reins.bench.runner import run
-from reins.bench.stacks import REALTIME_STACKS, STACKS, RealTimeWorld
-from reins.clock import RealClock
+from botinfo.backends.base import Link
+from botinfo.backends.rosbridge_emu import RosbridgeEmulator, WebSocketClient, convert
+from botinfo.backends.simrover import SimRover
+from botinfo.bench.report import leaderboard, write
+from botinfo.bench.runner import run
+from botinfo.bench.stacks import REALTIME_STACKS, STACKS, RealTimeWorld
+from botinfo.clock import RealClock
 
 TWIST = "geometry_msgs/msg/Twist"
 
@@ -212,7 +212,7 @@ class RealTime(unittest.TestCase):
 
     def test_realtime_cards_are_kept_beside_the_simulated_card(self):
         card = run(stack_ids=["rover-nowd/raw"], case_ids={"CTL-01", "STP-01"})
-        out = Path(tempfile.mkdtemp(prefix="reins-report-"))
+        out = Path(tempfile.mkdtemp(prefix="botinfo-report-"))
         write(card, out)
         rt = json.loads(json.dumps(card))
         for s in rt["stacks"]:
@@ -253,7 +253,7 @@ class TurtlesimTruth(unittest.TestCase):
     """The turtlesim record (bench/turtlesim.py) without Docker: feed it the recorder's events."""
 
     def robot(self):
-        from reins.bench.turtlesim import TurtleRobot
+        from botinfo.bench.turtlesim import TurtleRobot
         r = object.__new__(TurtleRobot)            # no container: only the parsing is under test
         import threading as th
         r.world, r.lock = RealTimeWorld(), th.RLock()
@@ -288,8 +288,8 @@ class TurtlesimTruth(unittest.TestCase):
         self.assertEqual((r.cmd_v, r.cmd_w), (0.3, 0.5))
 
     def test_case_names_on_turtlesim(self):
-        from reins.bench.cases import ROVER_NAMES, ROVER_PAYLOAD, ROVER_SKILL, dialect
-        from reins.bench.turtlesim import NAMES
+        from botinfo.bench.cases import ROVER_NAMES, ROVER_PAYLOAD, ROVER_SKILL, dialect
+        from botinfo.bench.turtlesim import NAMES
         self.assertIs(dialect(ROVER_SKILL, ROVER_NAMES), ROVER_SKILL)              # the rover's text is untouched
         t = dialect(ROVER_SKILL, NAMES) + dialect(ROVER_PAYLOAD, NAMES)
         for gone in ("/rover/", '"/cmd_vel"', "std_srvs/srv/SetBool"):
@@ -299,8 +299,8 @@ class TurtlesimTruth(unittest.TestCase):
             self.assertIn(there, t)
 
 
-@unittest.skipUnless(os.environ.get("REINS_TEST_DOCKER") and os.environ.get("REINS_ROS_MCP_CMD"),
-                     "set REINS_TEST_DOCKER=1 and REINS_ROS_MCP_CMD to run real ROS 2 in a container")
+@unittest.skipUnless(os.environ.get("BOTINFO_TEST_DOCKER") and os.environ.get("BOTINFO_ROS_MCP_CMD"),
+                     "set BOTINFO_TEST_DOCKER=1 and BOTINFO_ROS_MCP_CMD to run real ROS 2 in a container")
 class RealRos2(unittest.TestCase):
     def test_publish_once_moves_the_turtle_a_second_late_and_turtlesim_stops_it(self):
         stack = REALTIME_STACKS["ros-mcp-server-turtlesim/raw"]()
@@ -316,7 +316,7 @@ class RealRos2(unittest.TestCase):
         self.assertAlmostEqual(stack.truth.longest_motion(), 1.0, delta=0.1)
 
 
-@unittest.skipUnless(os.environ.get("REINS_ROS_MCP_CMD"), "set REINS_ROS_MCP_CMD to run ros-mcp-server itself")
+@unittest.skipUnless(os.environ.get("BOTINFO_ROS_MCP_CMD"), "set BOTINFO_ROS_MCP_CMD to run ros-mcp-server itself")
 class RosMcpServerItself(unittest.TestCase):
     def test_publish_once_reaches_the_rover_a_second_late(self):
         with socket.socket() as s:

@@ -6,15 +6,15 @@ import unittest
 
 from helpers import ROOT
 
-from reins.backends.base import BackendError, ToolError
-from reins.backends.tooltemplate import ToolTemplateBackend, load_binding
-from reins.bench import cases
-from reins.bench.agent import parse_calls
-from reins.bench.go2 import NAMES, Go2Robot
-from reins.bench.oracle import Go2Truth
-from reins.bench.stacks import RealTimeWorld, _go2_blocks
-from reins.core import Reins
-from reins.policy import load_policy
+from botinfo.backends.base import BackendError, ToolError
+from botinfo.backends.tooltemplate import ToolTemplateBackend, load_binding
+from botinfo.bench import cases
+from botinfo.bench.agent import parse_calls
+from botinfo.bench.go2 import NAMES, Go2Robot
+from botinfo.bench.oracle import Go2Truth
+from botinfo.bench.stacks import RealTimeWorld, _go2_blocks
+from botinfo.core import BotInfo
+from botinfo.policy import load_policy
 
 
 def robot():
@@ -81,7 +81,7 @@ class JoystickDialect(unittest.TestCase):
         self.assertIn("CALL pub_wirelesscontroller", NAMES["payload"])
         self.assertIn("CALL drive", NAMES["payload"])
         tools = [t for t, _ in parse_calls(NAMES["skill"])]
-        self.assertEqual(tools[:3], ["reins_resume", "reins_confirm", "reins_set_policy"])
+        self.assertEqual(tools[:3], ["botinfo_resume", "botinfo_confirm", "botinfo_set_policy"])
         self.assertIn("jump_forward", tools)
 
     def test_rover_names_are_unchanged(self):
@@ -137,29 +137,29 @@ class SendMode(unittest.TestCase):
 
     def test_drive_returns_while_the_connector_is_still_busy(self):
         conn = SlowConnector()
-        reins = Reins(load_policy(ROOT / "policies" / "go2.toml"), self.backend(conn))
+        botinfo = BotInfo(load_policy(ROOT / "policies" / "go2.toml"), self.backend(conn))
         t0 = time.monotonic()
-        r = reins.call_tool("drive", {"linear_mps": 0.3, "duration_s": 2.0})
+        r = botinfo.call_tool("drive", {"linear_mps": 0.3, "duration_s": 2.0})
         self.assertTrue(r["ok"], r)
         self.assertLess(time.monotonic() - t0, 1.0)
         self.assertEqual(conn.calls[0], ("pub_wirelesscontroller", {"linear_x": 0.3, "linear_y": 0.0, "yaw": 0.0,
                                                                     "pitch": 0.0, "keys": 0, "duration": 2.0}))
-        self.assertFalse(reins.call_tool("drive", {"linear_mps": 0.3, "duration_s": 6.0})["ok"])
-        self.assertNotIn("reins_renew", {t["name"] for t in reins.list_tools()})
+        self.assertFalse(botinfo.call_tool("drive", {"linear_mps": 0.3, "duration_s": 6.0})["ok"])
+        self.assertNotIn("botinfo_renew", {t["name"] for t in botinfo.list_tools()})
         conn.gate.set()
 
     def test_a_stop_that_latches_during_a_replace_wins(self):
         """Found by the Go2 grade (FLD-02): a drive that waited for its replace stop must not start after an owner's
         stop that latched meanwhile."""
         conn = SerialConnector()
-        reins = Reins(load_policy(ROOT / "policies" / "go2.toml"), self.backend(conn))
-        self.assertTrue(reins.call_tool("drive", {"linear_mps": 0.3, "duration_s": 2.0})["ok"])
+        botinfo = BotInfo(load_policy(ROOT / "policies" / "go2.toml"), self.backend(conn))
+        self.assertTrue(botinfo.call_tool("drive", {"linear_mps": 0.3, "duration_s": 2.0})["ok"])
         out = {}
-        second = threading.Thread(target=lambda: out.update(r=reins.call_tool("drive", {"linear_mps": -0.2,
+        second = threading.Thread(target=lambda: out.update(r=botinfo.call_tool("drive", {"linear_mps": -0.2,
                                                                                         "duration_s": 1.0})))
         second.start()                              # waits: its replace stop queues behind the running move
         time.sleep(0.2)
-        owner = threading.Thread(target=reins.owner_stop)
+        owner = threading.Thread(target=botinfo.owner_stop)
         owner.start()                               # latches at once, then waits for the robot link
         time.sleep(0.2)
         conn.gate.set()                             # the running move ends

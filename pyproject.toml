@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "botinfo-reins"
+name = "botinfo"
 version = "0.1.0"
-description = "Reins by BotInfo: a policy layer between AI agents and owner-connected robots, plus the Reins Safety Benchmark (v0: simulation and mocks only)"
+description = "BotInfo: a policy layer between AI agents and owner-connected robots, plus the BotInfo Benchmark (v0: simulation and mocks only)"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ dependencies = []
 authors = [{ name = "BotInfo.ai" }]
 
 [project.scripts]
-reins = "reins.cli:main"
+botinfo = "botinfo.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["reins*"]
+include = ["botinfo*"]

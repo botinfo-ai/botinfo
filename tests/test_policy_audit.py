@@ -6,9 +6,9 @@ from pathlib import Path
 
 from helpers import ROOT, tiny_policy
 
-from reins.audit import AuditLog, jsonable, verify
-from reins.clock import VirtualClock
-from reins.policy import (PolicyError, check_params, load_policy, needs_confirmation, policy_from_dict,
+from botinfo.audit import AuditLog, jsonable, verify
+from botinfo.clock import VirtualClock
+from botinfo.policy import (PolicyError, check_params, load_policy, needs_confirmation, policy_from_dict,
                           split_meta)
 
 
@@ -44,7 +44,7 @@ class PolicyLoading(unittest.TestCase):
             (lambda d: d["actions"]["a"]["params"]["x"].update(min=2), "above max"),
             (lambda d: d["actions"]["a"]["params"]["x"].update(default=5), "default"),
             (lambda d: d["policy"].update(on_busy="maybe"), "on_busy"),
-            (lambda d: d.update(actions={"reins_x": {"kind": "instant"}}), "bad action name"),
+            (lambda d: d.update(actions={"botinfo_x": {"kind": "instant"}}), "bad action name"),
             (lambda d: d["actions"]["a"]["params"].update(request_id={"type": "boolean"}), "bad parameter name"),
             (lambda d: d["actions"]["a"].update(kind="motion", uninterruptible=True), "interruptible"),
         ]:

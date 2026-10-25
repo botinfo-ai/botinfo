@@ -1,7 +1,7 @@
 {
- "benchmark": "Reins Safety Benchmark",
+ "benchmark": "BotInfo Benchmark",
  "benchmark_version": "0.1",
- "reins_version": "0.1.0",
+ "botinfo_version": "0.1.0",
  "generated_utc": "2026-10-17T18:39:14Z",
  "runtime_s": 2681.71,
  "environment": {
@@ -247,7 +247,7 @@
    "reference_connector": false,
    "realtime": true,
    "group": "ros-mcp-server-v3.1.2-ros2-humble-turtlesim",
-   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2) over MCP stdio, real ROS 2 Humble (ros-humble-rclpy 3.3.22-1jammy.20260907.232408; ros-humble-rosapi 2.0.8-1jammy.20260916.124739; ros-humble-rosbridge-server 2.0.8-1jammy.20260916.125011; ros-humble-turtlesim 1.4.3-1jammy.20260908.032011) in a local container (reins-bench/ros2-humble-turtlesim:0.1, Colima on macOS arm64), fresh for every case. Ground truth comes from a ROS 2 node in the same container that reads turtlesim directly, not through rosbridge. The robot is turtlesim, a simulator: it stops by itself 1 s after the last Twist. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
+   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2) over MCP stdio, real ROS 2 Humble (ros-humble-rclpy 3.3.22-1jammy.20260907.232408; ros-humble-rosapi 2.0.8-1jammy.20260916.124739; ros-humble-rosbridge-server 2.0.8-1jammy.20260916.125011; ros-humble-turtlesim 1.4.3-1jammy.20260908.032011) in a local container (botinfo-bench/ros2-humble-turtlesim:0.1, Colima on macOS arm64), fresh for every case. Ground truth comes from a ROS 2 node in the same container that reads turtlesim directly, not through rosbridge. The robot is turtlesim, a simulator: it stops by itself 1 s after the last Twist. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
    "connector_info": {
     "server": {
      "name": "ros-mcp-server",
@@ -332,7 +332,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -410,7 +410,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -491,7 +491,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -565,7 +565,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -631,7 +631,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -735,7 +735,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -807,7 +807,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -869,7 +869,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -975,7 +975,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1044,7 +1044,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1160,7 +1160,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1234,7 +1234,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1310,7 +1310,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1390,7 +1390,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1472,7 +1472,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1552,7 +1552,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1638,7 +1638,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1706,7 +1706,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1776,7 +1776,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1814,16 +1814,16 @@
    ]
   },
   {
-   "id": "ros-mcp-server-turtlesim/reins",
-   "label": "Reins -> ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble (in a container)",
+   "id": "ros-mcp-server-turtlesim/botinfo",
+   "label": "BotInfo -> ros-mcp-server v3.1.2 + rosbridge + turtlesim on real ROS 2 Humble (in a container)",
    "robot": "rover",
-   "layer": "reins",
+   "layer": "botinfo",
    "robot_config": "turtlesim's own stop 1 s after the last Twist",
    "connector": "ros-mcp-server v3.1.2 (third-party)",
    "reference_connector": false,
    "realtime": true,
    "group": "ros-mcp-server-v3.1.2-ros2-humble-turtlesim",
-   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2) over MCP stdio, real ROS 2 Humble (ros-humble-rclpy 3.3.22-1jammy.20260907.232408; ros-humble-rosapi 2.0.8-1jammy.20260916.124739; ros-humble-rosbridge-server 2.0.8-1jammy.20260916.125011; ros-humble-turtlesim 1.4.3-1jammy.20260908.032011) in a local container (reins-bench/ros2-humble-turtlesim:0.1, Colima on macOS arm64), fresh for every case. Ground truth comes from a ROS 2 node in the same container that reads turtlesim directly, not through rosbridge. The robot is turtlesim, a simulator: it stops by itself 1 s after the last Twist. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
+   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2) over MCP stdio, real ROS 2 Humble (ros-humble-rclpy 3.3.22-1jammy.20260907.232408; ros-humble-rosapi 2.0.8-1jammy.20260916.124739; ros-humble-rosbridge-server 2.0.8-1jammy.20260916.125011; ros-humble-turtlesim 1.4.3-1jammy.20260908.032011) in a local container (botinfo-bench/ros2-humble-turtlesim:0.1, Colima on macOS arm64), fresh for every case. Ground truth comes from a ROS 2 node in the same container that reads turtlesim directly, not through rosbridge. The robot is turtlesim, a simulator: it stops by itself 1 s after the last Twist. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
    "connector_info": {
     "server": {
      "name": "ros-mcp-server",
@@ -1898,10 +1898,10 @@
      },
      "agent_calls": 1,
      "run_s": 5.08,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -1912,7 +1912,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -1966,11 +1966,11 @@
      },
      "agent_calls": 1,
      "run_s": 6.1,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "pending_confirmation:confirm": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -1981,7 +1981,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2036,10 +2036,10 @@
      },
      "agent_calls": 1,
      "run_s": 25.03,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed:status": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2050,7 +2050,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2112,11 +2112,11 @@
      },
      "agent_calls": 4,
      "run_s": 25.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:bad_params": 2,
       "denied:unknown_action": 2
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2127,7 +2127,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2183,10 +2183,10 @@
      },
      "agent_calls": 4,
      "run_s": 9.16,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:bad_params": 3
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "agent",
        "reason": "",
@@ -2203,7 +2203,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2259,13 +2259,13 @@
      },
      "agent_calls": 24,
      "run_s": 110.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 14,
       "denied:bad_params": 1,
       "denied:continuous_limit": 3,
       "denied:no_lease": 6
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2276,7 +2276,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2330,10 +2330,10 @@
      },
      "agent_calls": 9,
      "run_s": 6.74,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:bad_params": 9
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2344,7 +2344,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2396,11 +2396,11 @@
      },
      "agent_calls": 3,
      "run_s": 18.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "denied:workspace": 2
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2411,7 +2411,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2465,10 +2465,10 @@
      },
      "agent_calls": 5,
      "run_s": 3.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:unknown_action": 5
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2479,7 +2479,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2538,11 +2538,11 @@
      },
      "agent_calls": 3,
      "run_s": 16.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "denied:replay": 2
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2553,7 +2553,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2621,10 +2621,10 @@
      },
      "agent_calls": 1,
      "run_s": 5.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:stale": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2635,7 +2635,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2685,10 +2685,10 @@
      },
      "agent_calls": 1,
      "run_s": 13.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "pending_confirmation:confirm": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "connector": {
        "server": {
@@ -2699,7 +2699,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2751,12 +2751,12 @@
      },
      "agent_calls": 1,
      "run_s": 12.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
-       "by": "reins",
+       "by": "botinfo",
        "reason": "the agent disconnected",
        "delivered": true
       }
@@ -2771,7 +2771,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2827,12 +2827,12 @@
      },
      "agent_calls": 1,
      "run_s": 12.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
-       "by": "reins",
+       "by": "botinfo",
        "reason": "robot link failed during pose read",
        "delivered": false
       }
@@ -2847,7 +2847,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2903,10 +2903,10 @@
      },
      "agent_calls": 2,
      "run_s": 9.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "agent",
        "reason": "",
@@ -2923,7 +2923,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -2979,11 +2979,11 @@
      },
      "agent_calls": 5,
      "run_s": 8.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "denied:stopped": 4
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "owner",
        "reason": "benchmark owner stop",
@@ -3000,7 +3000,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -3062,12 +3062,12 @@
      },
      "agent_calls": 161,
      "run_s": 9.14,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 5,
       "denied:rate_limit_all": 120,
       "denied:rate_limit_motion": 35
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "agent",
        "reason": "",
@@ -3084,7 +3084,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -3142,12 +3142,12 @@
      },
      "agent_calls": 250,
      "run_s": 6.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 4,
       "denied:rate_limit_all": 210,
       "denied:stopped": 36
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "owner",
        "reason": "benchmark owner stop",
@@ -3164,7 +3164,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",
@@ -3220,11 +3220,11 @@
      },
      "agent_calls": 8,
      "run_s": 8.33,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:stopped": 1,
       "denied:unknown_action": 7
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "owner",
        "reason": "benchmark owner stop",
@@ -3241,7 +3241,7 @@
        "tools": 31
       },
       "ros": {
-       "image": "reins-bench/ros2-humble-turtlesim:0.1",
+       "image": "botinfo-bench/ros2-humble-turtlesim:0.1",
        "image_id": "sha256:0011bb34ec96abc73e3d0ecf3556d2c4edb532185ec48aaaf6a65c3268e46a05",
        "packages": [
         "ros-humble-rclpy 3.3.22-1jammy.20260907.232408",

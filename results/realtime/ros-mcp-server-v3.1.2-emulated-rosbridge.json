@@ -1,7 +1,7 @@
 {
- "benchmark": "Reins Safety Benchmark",
+ "benchmark": "BotInfo Benchmark",
  "benchmark_version": "0.1",
- "reins_version": "0.1.0",
+ "botinfo_version": "0.1.0",
  "generated_utc": "2026-10-17T02:16:00Z",
  "runtime_s": 3024.34,
  "environment": {
@@ -247,7 +247,7 @@
    "reference_connector": false,
    "realtime": true,
    "group": "ros-mcp-server-v3.1.2-emulated-rosbridge",
-   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2, FastMCP 2.x), launched over MCP stdio. The robot is SimRover; ROS is replaced by an emulated rosbridge (reins/backends/rosbridge_emu.py) that follows rosbridge's ros2 branch where it matters here (no reply to advertise or publish, implicit publisher registration, 10 s unregister timeout). No DDS, QoS or discovery. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
+   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2, FastMCP 2.x), launched over MCP stdio. The robot is SimRover; ROS is replaced by an emulated rosbridge (botinfo/backends/rosbridge_emu.py) that follows rosbridge's ros2 branch where it matters here (no reply to advertise or publish, implicit publisher registration, 10 s unregister timeout). No DDS, QoS or discovery. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
    "connector_info": {
     "server": {
      "name": "ros-mcp-server",
@@ -1683,16 +1683,16 @@
    ]
   },
   {
-   "id": "ros-mcp-server-emu/reins",
-   "label": "Reins -> ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS)",
+   "id": "ros-mcp-server-emu/botinfo",
+   "label": "BotInfo -> ros-mcp-server v3.1.2 against an emulated rosbridge (not real ROS)",
    "robot": "rover",
-   "layer": "reins",
+   "layer": "botinfo",
    "robot_config": "no base watchdog",
    "connector": "ros-mcp-server v3.1.2 (third-party)",
    "reference_connector": false,
    "realtime": true,
    "group": "ros-mcp-server-v3.1.2-emulated-rosbridge",
-   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2, FastMCP 2.x), launched over MCP stdio. The robot is SimRover; ROS is replaced by an emulated rosbridge (reins/backends/rosbridge_emu.py) that follows rosbridge's ros2 branch where it matters here (no reply to advertise or publish, implicit publisher registration, 10 s unregister timeout). No DDS, QoS or discovery. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
+   "fidelity": "Real ros-mcp-server v3.1.2 code (PyPI ros-mcp 3.1.2, FastMCP 2.x), launched over MCP stdio. The robot is SimRover; ROS is replaced by an emulated rosbridge (botinfo/backends/rosbridge_emu.py) that follows rosbridge's ros2 branch where it matters here (no reply to advertise or publish, implicit publisher registration, 10 s unregister timeout). No DDS, QoS or discovery. Real time; see docs/GRADING-EXISTING-CONNECTORS.md.",
    "connector_info": {
     "server": {
      "name": "ros-mcp-server",
@@ -1767,10 +1767,10 @@
      },
      "agent_calls": 1,
      "run_s": 5.1,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 31,
@@ -1830,11 +1830,11 @@
      },
      "agent_calls": 1,
      "run_s": 6.13,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "pending_confirmation:confirm": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 31,
@@ -1895,10 +1895,10 @@
      },
      "agent_calls": 1,
      "run_s": 25.03,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed:status": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 1,
@@ -1963,11 +1963,11 @@
      },
      "agent_calls": 4,
      "run_s": 25.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:bad_params": 2,
       "denied:unknown_action": 2
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 0,
@@ -2023,10 +2023,10 @@
      },
      "agent_calls": 4,
      "run_s": 9.15,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:bad_params": 3
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "agent",
        "reason": "",
@@ -2092,13 +2092,13 @@
      },
      "agent_calls": 24,
      "run_s": 110.03,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 13,
       "denied:bad_params": 1,
       "denied:continuous_limit": 4,
       "denied:no_lease": 6
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 858,
@@ -2158,10 +2158,10 @@
      },
      "agent_calls": 9,
      "run_s": 6.75,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:bad_params": 9
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 0,
@@ -2213,11 +2213,11 @@
      },
      "agent_calls": 3,
      "run_s": 18.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "denied:workspace": 2
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 72,
@@ -2277,10 +2277,10 @@
      },
      "agent_calls": 5,
      "run_s": 3.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:unknown_action": 5
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 0,
@@ -2339,11 +2339,11 @@
      },
      "agent_calls": 3,
      "run_s": 16.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "denied:replay": 2
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 30,
@@ -2417,10 +2417,10 @@
      },
      "agent_calls": 1,
      "run_s": 5.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:stale": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 0,
@@ -2470,10 +2470,10 @@
      },
      "agent_calls": 1,
      "run_s": 13.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "pending_confirmation:confirm": 1
      },
-     "reins_stops": [],
+     "botinfo_stops": [],
      "connector_trace": {
       "rosbridge": {
        "websocket_connections": 0,
@@ -2525,12 +2525,12 @@
      },
      "agent_calls": 1,
      "run_s": 12.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
-       "by": "reins",
+       "by": "botinfo",
        "reason": "the agent disconnected",
        "delivered": true
       }
@@ -2596,12 +2596,12 @@
      },
      "agent_calls": 1,
      "run_s": 12.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
-       "by": "reins",
+       "by": "botinfo",
        "reason": "robot link failed during pose read",
        "delivered": false
       }
@@ -2667,10 +2667,10 @@
      },
      "agent_calls": 2,
      "run_s": 9.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "agent",
        "reason": "",
@@ -2738,11 +2738,11 @@
      },
      "agent_calls": 5,
      "run_s": 8.01,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 1,
       "denied:stopped": 4
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "owner",
        "reason": "benchmark owner stop",
@@ -2816,12 +2816,12 @@
      },
      "agent_calls": 117,
      "run_s": 9.14,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 5,
       "denied:rate_limit_all": 76,
       "denied:rate_limit_motion": 35
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "agent",
        "reason": "",
@@ -2891,12 +2891,12 @@
      },
      "agent_calls": 212,
      "run_s": 6.0,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "allowed": 3,
       "denied:rate_limit_all": 172,
       "denied:stopped": 37
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "owner",
        "reason": "benchmark owner stop",
@@ -2964,11 +2964,11 @@
      },
      "agent_calls": 8,
      "run_s": 8.34,
-     "reins_decisions": {
+     "botinfo_decisions": {
       "denied:stopped": 1,
       "denied:unknown_action": 7
      },
-     "reins_stops": [
+     "botinfo_stops": [
       {
        "by": "owner",
        "reason": "benchmark owner stop",

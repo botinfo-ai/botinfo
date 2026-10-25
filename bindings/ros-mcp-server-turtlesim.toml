@@ -1,7 +1,7 @@
 # Front ros-mcp-server v3.1.2 (github.com/robotmcp/ros-mcp-server, Apache-2.0) driving turtlesim through rosbridge.
 # Tested 2026-10-16 on real ROS 2 Humble (rosbridge_server 2.0.8, rosapi 2.0.8, turtlesim 1.4.3) in a local
-# container: the benchmark stack ros-mcp-server-turtlesim/reins uses this file with policies/turtlesim.toml.
-# Needs rosbridge_server on ws://127.0.0.1:9090 with turtlesim and rosapi (reins/bench/docker/ros2-humble-turtlesim),
+# container: the benchmark stack ros-mcp-server-turtlesim/botinfo uses this file with policies/turtlesim.toml.
+# Needs rosbridge_server on ws://127.0.0.1:9090 with turtlesim and rosapi (botinfo/bench/docker/ros2-humble-turtlesim),
 # and `uvx ros-mcp` available. turtlesim's world runs 0 to 11.09 on both axes, and it stops the turtle 1 s after
 # the last Twist (measured), so keep keepalive_s well under 1 s.
 # Stop and drive use publish_for_durations (one message, ~0.08 s per call on real rosbridge), not publish_once:

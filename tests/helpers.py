@@ -2,41 +2,41 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from reins.audit import AuditLog
-from reins.backends.base import Link
-from reins.backends.sesame import MockTransport, SesameBackend
-from reins.backends.sesame_mock import MockSesame
-from reins.backends.simrover import RosStyleConnector, SimRover
-from reins.backends.tooltemplate import ToolTemplateBackend, load_binding
-from reins.clock import VirtualClock
-from reins.core import Reins
-from reins.policy import load_policy, policy_from_dict
+from botinfo.audit import AuditLog
+from botinfo.backends.base import Link
+from botinfo.backends.sesame import MockTransport, SesameBackend
+from botinfo.backends.sesame_mock import MockSesame
+from botinfo.backends.simrover import RosStyleConnector, SimRover
+from botinfo.backends.tooltemplate import ToolTemplateBackend, load_binding
+from botinfo.clock import VirtualClock
+from botinfo.core import BotInfo
+from botinfo.policy import load_policy, policy_from_dict
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class RoverRig:
-    """Reins -> reference connector -> SimRover, in simulated time."""
+    """BotInfo -> reference connector -> SimRover, in simulated time."""
 
-    def __init__(self, watchdog_s=0.0, policy=None, **reins_kw):
+    def __init__(self, watchdog_s=0.0, policy=None, **botinfo_kw):
         self.clock = VirtualClock()
         self.rover = SimRover(self.clock, cmd_timeout_s=watchdog_s)
         self.link = Link()
         self.conn = RosStyleConnector(self.rover, self.link)
         self.backend = ToolTemplateBackend(self.conn, load_binding(ROOT / "bindings" / "simrover-ros-style.toml"))
         self.policy = policy or load_policy(ROOT / "policies" / "simrover.toml")
-        self.reins = Reins(self.policy, self.backend, clock=self.clock, audit=AuditLog(clock=self.clock), **reins_kw)
+        self.botinfo = BotInfo(self.policy, self.backend, clock=self.clock, audit=AuditLog(clock=self.clock), **botinfo_kw)
 
     def run(self, seconds):
         end = self.clock.now() + seconds
         while self.clock.now() < end - 1e-9:
             self.clock.advance(0.02)
             self.conn.tick()
-            self.reins.tick()
+            self.botinfo.tick()
             self.rover.step()
 
     def call(self, name, args=None):
-        return self.reins.call_tool(name, args or {})
+        return self.botinfo.call_tool(name, args or {})
 
 
 class SesameRig:
@@ -45,18 +45,18 @@ class SesameRig:
         self.mock = MockSesame(clock=self.clock, safety_patch=patched)
         self.link = Link()
         self.backend = SesameBackend(MockTransport(self.mock, self.link))
-        self.reins = Reins(policy or load_policy(ROOT / "policies" / "sesame.toml"), self.backend, clock=self.clock,
+        self.botinfo = BotInfo(policy or load_policy(ROOT / "policies" / "sesame.toml"), self.backend, clock=self.clock,
                            audit=AuditLog(clock=self.clock))
 
     def run(self, seconds):
         end = self.clock.now() + seconds
         while self.clock.now() < end - 1e-9:
             self.clock.advance(0.02)
-            self.reins.tick()
+            self.botinfo.tick()
             self.mock.advance()
 
     def call(self, name, args=None):
-        return self.reins.call_tool(name, args or {})
+        return self.botinfo.call_tool(name, args or {})
 
     def sent(self):
         return [(round(t, 2), k, v) for t, k, v in self.mock.sequence()]

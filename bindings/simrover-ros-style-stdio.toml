@@ -1,11 +1,11 @@
 # Map policies/simrover.toml onto the reference ROS-style connector (tool names as in ros-mcp-server).
-# connector = "simrover-ros-style" runs the connector and the simulator inside the Reins process (demo).
+# connector = "simrover-ros-style" runs the connector and the simulator inside the BotInfo process (demo).
 
 [binding]
 kind = "mcp-tools"
 label = "ROS-style generic connector (reference) over MCP stdio + SimRover"
 # The same reference connector, launched as a separate MCP server over stdio (what fronting a real one looks like).
-command = ["{python}", "-m", "reins.backends.simrover_server"]   # {python} = the Python running Reins
+command = ["{python}", "-m", "botinfo.backends.simrover_server"]   # {python} = the Python running BotInfo
 error_keys = ["error"]
 
 [stop]

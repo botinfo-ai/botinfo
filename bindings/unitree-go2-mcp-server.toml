@@ -1,5 +1,5 @@
 # Front unitree-go2-mcp-server (github.com/lpigeon/unitree-go2-mcp-server, Apache-2.0) at commit e7a6737d, with
-# policies/go2.toml. Tested 2026-10-17 only in simulation: the benchmark stacks go2-*/reins run the server's own code
+# policies/go2.toml. Tested 2026-10-17 only in simulation: the benchmark stacks go2-*/botinfo run the server's own code
 # and the real ros2 CLI on ROS 2 Humble in a local container, against BotInfo's stand-in Go2 node (not a Go2, not a
 # Go2 simulator). Never run against a robot.
 #
@@ -10,12 +10,12 @@
 # the call, the stop 1.15 s after the last message. A call cannot be interrupted, so a stop waits for the move
 # that is running. That is why:
 #   - drive is one call for the whole move (duration = $duration_s), not a stream of keep-alives;
-#   - start_mode = "send": Reins puts that call on the wire and returns at once, so the agent and the owner can
-#     still reach Reins while the server is busy (a stop is latched at once, and reaches the robot after the move);
+#   - start_mode = "send": BotInfo puts that call on the wire and returns at once, so the agent and the owner can
+#     still reach BotInfo while the server is busy (a stop is latched at once, and reaches the robot after the move);
 #   - the policy's lease ends with this stop; renewals are off.
 # The stop here centres the sticks. It is not a damping mode or an emergency stop.
 #
-# command: how Reins would launch the server next to a robot (adjust the path). The benchmark launches it itself,
+# command: how BotInfo would launch the server next to a robot (adjust the path). The benchmark launches it itself,
 # inside the container.
 
 [binding]

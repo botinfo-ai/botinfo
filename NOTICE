@@ -1,4 +1,4 @@
-Reins by BotInfo
+BotInfo (formerly named Reins)
 Copyright 2026 BotInfo.ai
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
@@ -6,36 +6,36 @@ This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party work this product uses, describes or was informed by:
 
   - Sesame robot, by Dorian Todd: https://github.com/dorianborian/sesame-robot (Apache License 2.0).
-    reins/backends/sesame_spec.py records facts read from the Sesame firmware source at commit d106cbc8
-    (command and face names, default settings, servo-write and delay counts). reins/backends/sesame_mock.py
+    botinfo/backends/sesame_spec.py records facts read from the Sesame firmware source at commit d106cbc8
+    (command and face names, default settings, servo-write and delay counts). botinfo/backends/sesame_mock.py
     imitates the firmware's HTTP API from that source, including BotInfo's optional motion-timeout patch.
-    No Sesame source code, firmware, CAD or documentation files are included. Reins is an independent BotInfo.ai
+    No Sesame source code, firmware, CAD or documentation files are included. BotInfo is an independent BotInfo.ai
     project. It is not made, endorsed or reviewed by Dorian Todd. "Sesame" is the name of his robot, not of
     this product.
 
-  - BotInfo sesame-kit (same copyright holder, Apache License 2.0): reins/clock.py,
-    reins/backends/sesame_spec.py and reins/backends/sesame_mock.py were copied from it on 2026-10-16 and
+  - BotInfo sesame-kit (same copyright holder, Apache License 2.0): botinfo/clock.py,
+    botinfo/backends/sesame_spec.py and botinfo/backends/sesame_mock.py were copied from it on 2026-10-16 and
     adapted, as each file says at the top.
 
   - ros-mcp-server, by Contoro Inc.: https://github.com/robotmcp/ros-mcp-server (Apache License 2.0).
-    The tool names and arguments of the reference connector in reins/backends/simrover.py follow its public
+    The tool names and arguments of the reference connector in botinfo/backends/simrover.py follow its public
     tool interface (v3.1.2). bindings/ros-mcp-server-turtlesim.toml calls those tools by name. No code was
     copied.
 
   - unitree-go2-mcp-server: https://github.com/lpigeon/unitree-go2-mcp-server (Apache License 2.0 text; its
     copyright line is still the template). The benchmark's container image downloads it at commit e7a6737d and
-    runs it unmodified (reins/bench/docker/ros2-humble-go2/). bindings/unitree-go2-mcp-server.toml calls its
-    tools by name, and reins/bench/go2.py and go2_standin.py record its button codes and stick scale. No code is
+    runs it unmodified (botinfo/bench/docker/ros2-humble-go2/). bindings/unitree-go2-mcp-server.toml calls its
+    tools by name, and botinfo/bench/go2.py and go2_standin.py record its button codes and stick scale. No code is
     included in this repository.
 
   - unitree_ros2, by Unitree Robotics: https://github.com/unitreerobotics/unitree_ros2 (BSD 3-Clause). The same
     image downloads it at commit 668d1ec5 and builds only its unitree_go message package.
-    reins/bench/docker/ros2-humble-go2/setup.sh is adapted from its setup.sh. No other file is included.
+    botinfo/bench/docker/ros2-humble-go2/setup.sh is adapted from its setup.sh. No other file is included.
 
   - OpenClaw: https://github.com/openclaw/openclaw (MIT). Its documentation was read for the skill format in
     integrations/openclaw/. No code was copied.
 
-  - Model Context Protocol: reins/mcp/ implements the public MCP specification (JSON-RPC over stdio) with the
+  - Model Context Protocol: botinfo/mcp/ implements the public MCP specification (JSON-RPC over stdio) with the
     Python standard library. No SDK code is included.
 
 Sesame, ROS, Unitree, Go2, OpenClaw and Claude are the names of their owners' projects or products. Their use here

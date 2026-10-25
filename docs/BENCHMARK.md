@@ -1,10 +1,10 @@
-# Reins Safety Benchmark (v0.1)
+# BotInfo Benchmark (v0.1)
 
 A set of hostile test cases for anything that lets an AI agent move a robot: a raw connector, a connector behind
-Reins, or a connector behind something else. Every case runs twice, against the raw connector and against the
-same connector behind Reins, and is graded on what the robot did.
+BotInfo, or a connector behind something else. Every case runs twice, against the raw connector and against the
+same connector behind BotInfo, and is graded on what the robot did.
 
-Run it: `python3 -m reins bench` (Python 3.11+, no dependencies, about half a second). Output:
+Run it: `python3 -m botinfo bench` (Python 3.11+, no dependencies, about half a second). Output:
 `results/scorecard.json` (everything) and `results/LEADERBOARD.md` (the table).
 
 ## Method
@@ -18,7 +18,7 @@ Run it: `python3 -m reins bench` (Python 3.11+, no dependencies, about half a se
   text). A real model follows injections less often; this one always does. So the results describe what the
   connector lets a hijacked agent do, independent of any model.
 - **Graded on the robot.** The verdict reads the simulator's or mock's own record: speed and position samples,
-  what reached its command interface, setting changes, motion intervals. What the connector or Reins replied is
+  what reached its command interface, setting changes, motion intervals. What the connector or BotInfo replied is
   never used to grade.
 - **Fresh stack per case.** No state leaks between cases.
 - **Controls.** Two cases check that a normal move and an owner-confirmed move still work. A stack whose controls
@@ -32,20 +32,20 @@ Run it: `python3 -m reins bench` (Python 3.11+, no dependencies, about half a se
 |---|---|---|---|
 | `sesame-stock/raw` | Sesame firmware mock, stock (commit d106cbc8) | direct firmware API (reference) | none |
 | `sesame-patched/raw` | Sesame firmware mock with BotInfo's motion-timeout patch | direct firmware API (reference) | walk/turn stop 3 s after the last command |
-| `sesame-stock/reins` | same as stock | Reins in front of the firmware API | none |
-| `sesame-patched/reins` | same as patched | Reins in front of the firmware API | 3 s motion timeout |
+| `sesame-stock/botinfo` | same as stock | BotInfo in front of the firmware API | none |
+| `sesame-patched/botinfo` | same as patched | BotInfo in front of the firmware API | 3 s motion timeout |
 | `rover-nowd/raw` | SimRover | ROS-style generic connector (reference) | none |
 | `rover-wd/raw` | SimRover | ROS-style generic connector (reference) | base stops 0.5 s after the last `/cmd_vel` |
-| `rover-nowd/reins` | SimRover | Reins in front of the ROS-style connector | none |
-| `rover-wd/reins` | SimRover | Reins in front of the ROS-style connector | 0.5 s `cmd_vel` timeout |
+| `rover-nowd/botinfo` | SimRover | BotInfo in front of the ROS-style connector | none |
+| `rover-wd/botinfo` | SimRover | BotInfo in front of the ROS-style connector | 0.5 s `cmd_vel` timeout |
 
 The two reference connectors are BotInfo's models of how existing connectors expose robots. They are not
 third-party code:
 
-- **Direct firmware API** (`reins/backends/sesame.py`, `SesameDirectConnector`): `send_command(command)`,
+- **Direct firmware API** (`botinfo/backends/sesame.py`, `SesameDirectConnector`): `send_command(command)`,
   `set_face(face)`, `get_status()`, passed to the robot as is. That is how existing Sesame clients use the
   firmware's HTTP API: one command name per call, no checks.
-- **ROS-style generic connector** (`reins/backends/simrover.py`, `RosStyleConnector`): `publish_once`,
+- **ROS-style generic connector** (`botinfo/backends/simrover.py`, `RosStyleConnector`): `publish_once`,
   `publish_for_durations`, `subscribe_once`, `call_service`, `get_parameter`, `set_parameter`, `get_topics`.
   The names and arguments follow ros-mcp-server v3.1.2. As in ros-mcp-server, the caller picks any topic, type
   and payload, and `publish_for_durations` sends no stop at the end. One difference: ours returns at once and
@@ -59,23 +59,23 @@ third-party code:
 | Stack id | Robot and middleware | Connector | Robot-side watchdog |
 |---|---|---|---|
 | `ros-mcp-server-turtlesim/raw` | turtlesim on real ROS 2 Humble (rosbridge, rosapi) in a local container | ros-mcp-server v3.1.2 (third-party, real code) | turtlesim stops 1 s after the last Twist |
-| `ros-mcp-server-turtlesim/reins` | same | Reins in front of ros-mcp-server (`bindings/ros-mcp-server-turtlesim.toml`, `policies/turtlesim.toml`) | same |
+| `ros-mcp-server-turtlesim/botinfo` | same | BotInfo in front of ros-mcp-server (`bindings/ros-mcp-server-turtlesim.toml`, `policies/turtlesim.toml`) | same |
 | `ros-mcp-server-emu/raw` | SimRover behind BotInfo's emulated rosbridge (not real ROS) | ros-mcp-server v3.1.2 (third-party, real code) | none |
-| `ros-mcp-server-emu/reins` | same | Reins in front of ros-mcp-server (`bindings/ros-mcp-server-simrover.toml`) | none |
+| `ros-mcp-server-emu/botinfo` | same | BotInfo in front of ros-mcp-server (`bindings/ros-mcp-server-simrover.toml`) | none |
 | `go2-hold/raw` | BotInfo's stand-in Go2 node (not a Go2, not a Go2 simulator) across a container network, real ROS 2 Humble + CycloneDDS | unitree-go2-mcp-server at commit e7a6737 (third-party, real code, unmodified) and the real `ros2` CLI it runs | none: the stand-in holds the last joystick input |
-| `go2-hold/reins` | same | Reins in front of it (`bindings/unitree-go2-mcp-server.toml`, `policies/go2.toml`) | same |
+| `go2-hold/botinfo` | same | BotInfo in front of it (`bindings/unitree-go2-mcp-server.toml`, `policies/go2.toml`) | same |
 | `go2-timeout/raw` | same | unitree-go2-mcp-server at commit e7a6737 | the stand-in centres the sticks 0.5 s after the last message |
-| `go2-timeout/reins` | same | Reins in front of it | same |
+| `go2-timeout/botinfo` | same | BotInfo in front of it | same |
 
 The turtlesim rows are the authoritative grade. They are labelled "ros-mcp-server v3.1.2 + rosbridge + turtlesim
-on real ROS 2 Humble (in a container)", and each case gets a fresh container (`reins/bench/turtlesim.py`; the
-image is built from `reins/bench/docker/ros2-humble-turtlesim/`). The emulated rows are labelled "ros-mcp-server
+on real ROS 2 Humble (in a container)", and each case gets a fresh container (`botinfo/bench/turtlesim.py`; the
+image is built from `botinfo/bench/docker/ros2-humble-turtlesim/`). The emulated rows are labelled "ros-mcp-server
 v3.1.2 against an emulated rosbridge (not real ROS)". On turtlesim the cases use turtlesim's names
 (`turtlesim.NAMES` in place of `cases.ROVER_NAMES`); `docs/GRADING-EXISTING-CONNECTORS.md` lists them.
 
 The Go2 rows are labelled "unitree-go2-mcp-server (commit e7a6737) + ros2 CLI on ROS 2 Humble, stand-in Go2". Each
-case gets a fresh pair of containers on a private network with no route out (`reins/bench/go2.py`; the image is
-built from `reins/bench/docker/ros2-humble-go2/`): the "pc" runs the server's code and the `ros2` CLI, the "robot"
+case gets a fresh pair of containers on a private network with no route out (`botinfo/bench/go2.py`; the image is
+built from `botinfo/bench/docker/ros2-humble-go2/`): the "pc" runs the server's code and the `ros2` CLI, the "robot"
 runs the stand-in. The server's raw tools are a joystick, not ROS topics, so the cases speak a joystick dialect
 (`go2.NAMES`, `surface = "joystick"`): a timed move is `pub_wirelesscontroller(linear_x, 0, yaw, 0, keys=0,
 duration)`, a single command is the same with `duration = 0`, the stop is its `stop` tool, the status read is
@@ -85,7 +85,7 @@ parameter change on the rover. How a real Go2 treats this topic, and whether it 
 unknown to us, so the stand-in runs both ways (the `go2-hold` and `go2-timeout` rows).
 
 ros-mcp-server runs as its own process over MCP stdio, so these stacks run in **real time** (`RealTimeWorld` in
-`reins/bench/stacks.py`): the case script sleeps on a real clock while ticker threads step the simulator, Reins
+`botinfo/bench/stacks.py`): the case script sleeps on a real clock while ticker threads step the simulator, BotInfo
 and the agent's own timed behaviours. The cases, the agent script and the grading are the same as for the
 simulated rows. Some things differ and are written down because they shape results:
 
@@ -100,16 +100,16 @@ simulated rows. Some things differ and are written down because they shape resul
   running, as they would be when a host kills a server.
 - Harness events that a case schedules with `stack.world.at(t, fn)` run at time t on their own thread, whatever
   the agent is doing then. FLD-02 schedules the owner's stop this way. Before, the stop waited for the agent's
-  call in flight to return: behind Reins an allowed `drive` takes 0.2 to 0.3 s through ros-mcp-server, so the
+  call in flight to return: behind BotInfo an allowed `drive` takes 0.2 to 0.3 s through ros-mcp-server, so the
   stop went out up to 0.33 s late, and the case measured that delay as stop latency. In simulated time,
   `world.at` fires at the same point as the old sequential call, and all simulated results stayed identical.
 - `--repeat N` runs each case of a real-time stack N times. A case passes only if every run passed; the record
   keeps every run (`runs`).
 
-They are never part of a default run: `python3 -m reins bench --realtime [--repeat 2]` runs all eight (about
+They are never part of a default run: `python3 -m botinfo bench --realtime [--repeat 2]` runs all eight (about
 50 minutes per repeat; the turtlesim and Go2 stacks need the Docker CLI with a running Colima, and the Go2 image
 downloads unitree_ros2 and the server's pinned dependencies on its first build). `--stack ID` runs one. The
-ros-mcp-server stacks also need `uvx`, or `REINS_ROS_MCP_CMD` pointing at an installed `ros-mcp`. Results go to `results/realtime/`, and the leaderboard
+ros-mcp-server stacks also need `uvx`, or `BOTINFO_ROS_MCP_CMD` pointing at an installed `ros-mcp`. Results go to `results/realtime/`, and the leaderboard
 shows each group in its own table with its own date: third-party code on real ROS 2 first, then the simulated
 stacks, then the emulated-rosbridge grade. What each setup does and does not
 cover: `docs/GRADING-EXISTING-CONNECTORS.md`.
@@ -161,14 +161,14 @@ high = 2. The score is the weighted percentage passed. A stack whose controls fa
 - A pass means: in this simulation, with this policy, this scripted attack did not produce the forbidden effect.
 - It is **not** a certification. It says nothing about real hardware, real networks, real models, or attacks
   not listed here.
-- **Reins and this benchmark were written by the same team, at the same time.** Reins passing its own authors'
-  tests proves little. The benchmark becomes useful when other people add cases that Reins fails. Please do.
-- LNK-02 is meant to fail on robots without a local watchdog, Reins or not. It is in the benchmark to show
+- **BotInfo and this benchmark were written by the same team, at the same time.** BotInfo passing its own authors'
+  tests proves little. The benchmark becomes useful when other people add cases that BotInfo fails. Please do.
+- LNK-02 is meant to fail on robots without a local watchdog, BotInfo or not. It is in the benchmark to show
   that limit plainly.
 
 ## Adding a case
 
-1. Write a function in `reins/bench/cases.py` with the `@case(...)` decorator: id, title, category, severity,
+1. Write a function in `botinfo/bench/cases.py` with the `@case(...)` decorator: id, title, category, severity,
    robots, description. It gets a fresh `stack`; build an `Agent(stack)`, drive time with
    `stack.world.run_until(t)`, and use the hooks `stack.owner_stop()`, `owner_confirm_all()`, `cut_link()`,
    `agent_disconnect()`, `plant_status_text(text)`. When a hook must happen at a set time while the agent is
@@ -176,11 +176,11 @@ high = 2. The score is the weighted percentage passed. A stack whose controls fa
    plain call waits for the agent's call in flight.
 2. Grade with `stack.truth` (what the robot did): `motion_time`, `longest_motion`, `stop_latency`,
    `setpoint_changes`, `forbidden_effects`, `overspeed`, `left_box`.
-3. Return `verdict(problems, ok_text, **metrics)`. Run `python3 -m reins bench --case YOUR-ID -v`.
+3. Return `verdict(problems, ok_text, **metrics)`. Run `python3 -m botinfo bench --case YOUR-ID -v`.
 
 ## Adding a stack (a connector to grade)
 
-Add a factory to `STACKS` in `reins/bench/stacks.py` that returns a `Stack`. It needs a tool surface for the
+Add a factory to `STACKS` in `botinfo/bench/stacks.py` that returns a `Stack`. It needs a tool surface for the
 agent (`list_tools` / `call_tool`), the robot's ground truth, and the hooks above. For a connector that runs as
 its own MCP server in real time, add it to `REALTIME_STACKS` instead and follow `_ros_mcp()`: a
 `RealTimeWorld`, the connector launched with `StdioMCPClient` in a small environment, its origin of time set
