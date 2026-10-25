@@ -15,10 +15,10 @@ python3 -m reins check --policy policies/simrover.toml --binding bindings/simrov
 |---|---|---|
 | `name`, `robot` | required | identifiers shown to the agent and in the audit log |
 | `description` | "" | one line for the agent (`reins_policy`) |
-| `command_ttl_s` | 5.0 | a pending command (waiting for confirmation), or one with an older `issued_at`, is dropped after this |
+| `command_ttl_s` | 5.0 | a pending command (waiting for confirmation), or one with an older `issued_at`, is dropped after this; a newer motion command from the agent cancels a pending one at once (`cancelled_requests` in its answer) |
 | `max_clock_skew_s` | 2.0 | tolerance when judging a caller's `issued_at` |
 | `require_request_id` | false | when true, every action call must carry a unique `request_id` |
-| `on_busy` | "replace" | a new motion while one runs: `replace` (stop, then start the new one) or `reject` |
+| `on_busy` | "replace" | a new motion while one runs: `replace` (stop, then start the new one; the answer's `replaced` field and `note` tell the agent how far the old one got, e.g. 1.5 of 3.0 s) or `reject` (refused, with the seconds left). Motion calls return at once, and the tool description tells the agent which rule applies |
 
 `[stop]`
 | Key | Default | Meaning |

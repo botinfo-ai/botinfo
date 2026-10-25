@@ -80,9 +80,16 @@ class Reins:
             desc = a.description or a.name
             if a.kind == "motion":
                 desc += (f" Runs on a lease of at most {self.policy.max_lease_s:g} s, then stops by itself."
-                         + (" Renew with reins_renew." if self.policy.renewable else ""))
+                         + (" Renew with reins_renew." if self.policy.renewable else "")
+                         + " The call returns at once, while the robot moves; runs_for_s says for how long.")
+            if a.kind in ("motion", "oneshot"):
+                desc += (" A new motion command stops the running one early and replaces it (the answer says how "
+                         "far it got); wait for it to end first if it should finish."
+                         if self.policy.on_busy == "replace" else
+                         " A new motion command is refused while one is running.")
             if a.confirm or any(p.confirm_above is not None or p.confirm_values for p in a.params.values()):
-                desc += " Some calls need the owner's confirmation; those return pending_confirmation."
+                desc += (" Some calls need the owner's confirmation; those return pending_confirmation. A newer "
+                         "motion command cancels a request still waiting for it.")
             if a.uninterruptible:
                 desc += " Cannot be interrupted by a stop once it starts."
             tools.append({"name": a.name, "description": desc,
@@ -149,6 +156,14 @@ class Reins:
             if action.rate and not self._take(self.calls_action[name], action.rate, now):
                 return self._deny(name, "rate_limit_action", f"more than {action.rate.max} {name} calls in "
                                   f"{action.rate.window_s:g} s")
+            gone = []
+            if action.kind in ("motion", "oneshot"):     # a newer motion makes an older request obsolete
+                gone = sorted(c for c, p in self.pending.items()
+                              if self.policy.actions[p["action"]].kind in ("motion", "oneshot"))
+                for c in gone:
+                    del self.pending[c]
+                if gone:
+                    self.audit.write("pending_superseded", confirmation_ids=gone, by=name)
             why_confirm = needs_confirmation(action, params)
             if why_confirm:
                 cid = f"c-{next(self._ids)}"
@@ -163,10 +178,14 @@ class Reins:
                     self.on_pending(dict(p))
                 except Exception:  # a notification problem must not break the request path
                     pass
-            return {"ok": True, "decision": "pending_confirmation", "confirmation_id": cid, "reason": why_confirm,
-                    "expires_in_s": self.policy.command_ttl_s,
-                    "note": "The owner must confirm on the robot's local channel. The agent cannot confirm."}
-        return self._execute(action, params, origin="agent")
+            out = {"ok": True, "decision": "pending_confirmation", "confirmation_id": cid, "reason": why_confirm,
+                   "expires_in_s": self.policy.command_ttl_s,
+                   "note": "The owner must confirm on the robot's local channel. The agent cannot confirm."}
+        else:
+            out = self._execute(action, params, origin="agent")
+        if gone:
+            out["cancelled_requests"] = gone
+        return out
 
     # ================================================================== owner channel
     def owner_stop(self, reason: str = "owner stop") -> dict:
@@ -300,7 +319,9 @@ class Reins:
                 busy = self.lease is not None or now < self.busy_until
                 replace = action.kind in ("motion", "oneshot") and busy
                 if replace and self.policy.on_busy == "reject":
-                    return self._deny(name, "busy", "another motion is running; stop it first or wait")
+                    left = (self.lease["end"] if self.lease is not None else self.busy_until) - now
+                    return self._deny(name, "busy", f"another motion is running ({max(0.0, left):.2f} s left); "
+                                      "stop it first or wait")
             try:
                 if action.kind == "motion":
                     duration = self.backend.motion_duration(action, params)
@@ -316,13 +337,18 @@ class Reins:
                     why = self._workspace_problem(action, params)
                     if why:
                         return self._deny(name, "workspace", why)
+                cut = None
                 if replace:
                     with self._state:
                         old, self.lease = self.lease, None
+                        t = self.clock.now()
+                        cut = ({"lease_id": old["id"], "action": old["action"], "ran_s": round(t - old["start"], 3),
+                                "of_s": round(old["end"] - old["start"], 3)} if old else {"action": self.busy_action})
                     self.backend.stop()
-                    self.audit.write("replaced", old=old["id"] if old else self.busy_action, by=name)
+                    self.audit.write("replaced", old=old["id"] if old else self.busy_action, by=name,
+                                     **{k: v for k, v in cut.items() if k.endswith("_s")})
                 if self._stopped_since(gen):         # a stop latched while we waited (e.g. for the replace stop)
-                    return self._deny(name, "stopped", "a stop arrived while the motion was starting")
+                    return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"), cut)
                 if action.kind == "motion":
                     self.backend.start_motion(action, params)
                     with self._state:
@@ -336,23 +362,35 @@ class Reins:
                                           "end": now + duration, "next_ka": now + self.policy.keepalive_s,
                                           "keepalives": 0}
                     if not started:
-                        return self._deny(name, "stopped", "a stop arrived while the motion was starting")
+                        return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"),
+                                          cut)
                     self.audit.write("decision", tool=name, decision="allowed", origin=origin, params=params,
                                      lease_id=lid, runs_for_s=round(duration, 3))
-                    return {"ok": True, "decision": "allowed", "lease_id": lid, "runs_for_s": round(duration, 3),
-                            "renewable": self.policy.renewable}
+                    return self._said({"ok": True, "decision": "allowed", "lease_id": lid,
+                                       "runs_for_s": round(duration, 3), "renewable": self.policy.renewable}, cut)
                 result = self.backend.execute(action, params)
                 if action.kind == "oneshot":
                     with self._state:
                         self.busy_until = now + self.backend.oneshot_duration(action, params)
                         self.busy_action = name
                 self.audit.write("decision", tool=name, decision="allowed", origin=origin, params=params)
-                return {"ok": True, "decision": "allowed", "result": result,
-                        **({"uninterruptible": True} if action.uninterruptible else {})}
+                return self._said({"ok": True, "decision": "allowed", "result": result,
+                                   **({"uninterruptible": True} if action.uninterruptible else {})}, cut)
             except BackendError as e:
                 self.audit.write("decision", tool=name, decision="failed", origin=origin, error=str(e))
                 self._backend_failed(e, f"{name}")
                 return {"ok": False, "decision": "failed", "rule": "backend_error", "reason": str(e)}
+
+    @staticmethod
+    def _said(out: dict, cut) -> dict:
+        """Tell the agent when its call stopped the running motion early. Motion calls return at once, so an agent
+        that sends its next move too soon would otherwise believe the last one ran in full."""
+        if cut:
+            out["replaced"] = cut
+            out["note"] = (f"This stopped the previous {cut['action']} ({cut['lease_id']}) early, after "
+                           f"{cut['ran_s']:g} of {cut['of_s']:g} s." if "lease_id" in cut else
+                           f"This stopped the previous {cut['action']} early.")
+        return out
 
     def _stopped_since(self, gen) -> bool:
         """A stop sets stop_gen under _state at once, even while it waits for _io (held by this request). Checking

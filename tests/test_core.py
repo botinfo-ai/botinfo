@@ -56,6 +56,47 @@ class RoverEnforcement(unittest.TestCase):
         oks = [r.call("drive", {"linear_mps": 0.1, "duration_s": 0.5})["ok"] for _ in range(8)]
         self.assertEqual(oks.count(True), 5)
 
+    def test_replaced_motion_is_reported_to_the_agent(self):
+        r = RoverRig()
+        drive = next(t for t in r.reins.list_tools() if t["name"] == "drive")["description"]
+        self.assertIn("returns at once", drive)
+        self.assertIn("replaces it", drive)
+        first = r.call("drive", {"linear_mps": 0.3, "duration_s": 3.0})
+        r.run(1.2)
+        second = r.call("drive", {"linear_mps": 0.0, "angular_rps": 1.0, "duration_s": 1.5})
+        self.assertTrue(second["ok"])
+        cut = second["replaced"]
+        self.assertEqual((cut["lease_id"], cut["action"], cut["of_s"]), (first["lease_id"], "drive", 3.0))
+        self.assertAlmostEqual(cut["ran_s"], 1.2, places=1)
+        self.assertIn("early", second["note"])
+        self.assertAlmostEqual(r.reins.audit.events("replaced")[-1]["ran_s"], cut["ran_s"], places=3)
+        r.run(2.0)
+        self.assertNotIn("replaced", r.call("drive", {"linear_mps": 0.3, "duration_s": 1.0}))   # nothing was running
+
+    def test_busy_reject_says_time_left(self):
+        r = RoverRig(policy=tiny_policy(policy={"name": "t", "robot": "test", "on_busy": "reject"}))
+        drive = next(t for t in r.reins.list_tools() if t["name"] == "drive")["description"]
+        self.assertIn("refused while one is running", drive)
+        r.call("drive", {"linear_mps": 0.3, "duration_s": 3.0})
+        r.run(1.0)
+        res = r.call("drive", {"linear_mps": 0.3, "duration_s": 1.0})
+        self.assertEqual(res["rule"], "busy")
+        self.assertIn("2.00 s left", res["reason"])
+
+    def test_newer_motion_cancels_a_waiting_request(self):
+        r = RoverRig()
+        asked = r.call("drive", {"linear_mps": 0.45, "duration_s": 2.0})
+        self.assertEqual(asked["decision"], "pending_confirmation")
+        self.assertNotIn("cancelled_requests", r.call("set_led", {"color": "red"}))   # not a motion: kept
+        r.run(1.0)
+        res = r.call("drive", {"linear_mps": 0.3, "duration_s": 2.0})
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["cancelled_requests"], [asked["confirmation_id"]])
+        self.assertFalse(r.reins.owner_confirm(asked["confirmation_id"])["ok"])     # the owner's late OK does nothing
+        self.assertEqual(r.reins.audit.events("pending_superseded")[-1]["confirmation_ids"], [asked["confirmation_id"]])
+        r.run(2.5)
+        self.assertLessEqual(max(abs(smp[5]) for smp in r.rover.samples), 0.3 + 1e-9)       # never commanded 0.45
+
     def test_replay_stale_future(self):
         r = RoverRig()
         a = {"linear_mps": 0.1, "duration_s": 0.5, "request_id": "abc"}
