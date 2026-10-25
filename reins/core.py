@@ -24,6 +24,7 @@ from __future__ import annotations
 import itertools
 import math
 import threading
+import time
 from collections import OrderedDict, defaultdict, deque
 
 from .audit import AuditLog
@@ -38,7 +39,7 @@ STOP_NOTE = ("This is a software stop sent over a network link. If the robot did
 
 class Reins:
     def __init__(self, policy, backend, clock=None, audit: AuditLog | None = None, on_pending=None,
-                 strict_binding: bool = True):
+                 strict_binding: bool = True, sleep=None):
         problems = [p for p in backend.check_policy(policy) if not p.startswith("warning:")]
         if problems and strict_binding:
             raise PolicyError("policy and backend do not fit:\n  - " + "\n  - ".join(problems))
@@ -46,6 +47,8 @@ class Reins:
         self.clock = clock or RealClock()
         self.audit = audit or AuditLog(clock=self.clock)
         self.on_pending = on_pending
+        # reins_wait sleeps with this; a virtual clock has no real time to wait in unless the harness passes one
+        self.sleep = sleep or (None if getattr(self.clock, "virtual", False) else time.sleep)
         self._state = threading.RLock()
         self._io = threading.RLock()
         self.latched = False
@@ -84,7 +87,7 @@ class Reins:
                          + " The call returns at once, while the robot moves; runs_for_s says for how long.")
             if a.kind in ("motion", "oneshot"):
                 desc += (" A new motion command stops the running one early and replaces it (the answer says how "
-                         "far it got); wait for it to end first if it should finish."
+                         "far it got); call reins_wait first if the running one should finish."
                          if self.policy.on_busy == "replace" else
                          " A new motion command is refused while one is running.")
             if a.confirm or any(p.confirm_above is not None or p.confirm_values for p in a.params.values()):
@@ -103,6 +106,16 @@ class Reins:
         tools.append({"name": "reins_status", "description": "Reins state (stopped?, running lease, pending "
                       "confirmations) and the robot's status fields.",
                       "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True}})
+        if any(a.kind in ("motion", "oneshot") for a in self.policy.actions.values()):
+            tools.append({"name": "reins_wait", "description": "Wait until the running motion ends, or at most max_s "
+                          f"seconds (default {self.policy.max_lease_s:g}), then return the same state as reins_status. "
+                          "It returns once Reins has sent the stop at the end of the motion (the robot may still be "
+                          "slowing down). Use it between moves so each one finishes. A stop (yours or the owner's) "
+                          "ends the wait at once, and reins_stop is never delayed by it.",
+                          "inputSchema": {"type": "object", "properties": {"max_s": {
+                              "type": "number", "minimum": 0, "maximum": self.policy.max_lease_s}},
+                              "additionalProperties": False},
+                          "annotations": {"readOnlyHint": True}})
         tools.append({"name": "reins_policy", "description": "What this robot's owner allows: actions, bounds, limits.",
                       "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True}})
         if self.policy.renewable:
@@ -128,6 +141,8 @@ class Reins:
                                   f"{self.policy.rate_all.window_s:g} s")
         if name == "reins_status":
             return self._status_result()
+        if name == "reins_wait":
+            return self._wait(args)
         if name == "reins_policy":
             return self._ok(name, "policy", policy=self.policy.summary())
         if name == "reins_renew" and self.policy.renewable:
@@ -466,7 +481,7 @@ class Reins:
                                  **({"params": p["params"]} if include_pending_params else {})}
                                 for p in self.pending.values()]}
 
-    def _status_result(self) -> dict:
+    def _status_result(self, tool: str = "reins_status", rule: str = "status", **extra) -> dict:
         robot, err = {}, None
         with self._io:
             try:
@@ -477,9 +492,33 @@ class Reins:
         for r in red:
             self.audit.write("output_redacted", **r)
         robot = clean if err is None else {"unreachable": err}
-        self.audit.write("decision", tool="reins_status", decision="allowed", rule="status", redacted=len(red))
-        return {"ok": True, "reins": self._state_view(), "robot": robot,
+        self.audit.write("decision", tool=tool, decision="allowed", rule=rule, redacted=len(red), **extra)
+        return {"ok": True, **extra, "reins": self._state_view(), "robot": robot,
                 **({"redacted_fields": [r["field"] for r in red]} if red else {})}
+
+    def _wait(self, args) -> dict:
+        """Block the CALLER until the running motion ends, a stop lands, the agent goes away or max_s passes. It
+        holds no lock while it sleeps, so tick() keeps ending leases and every stop goes through at once. The MCP
+        server runs it on its own thread (StdioServer slow_tools), so the agent's reins_stop is never queued behind
+        it."""
+        cap = self.policy.max_lease_s
+        if not isinstance(args, dict) or set(args) - {"max_s"}:
+            return self._deny("reins_wait", "bad_params", "expected only max_s")
+        m = args.get("max_s", cap)
+        if isinstance(m, bool) or not isinstance(m, (int, float)) or not math.isfinite(m) or not 0 <= m <= cap:
+            return self._deny("reins_wait", "bad_params", f"max_s must be 0..{cap:g}")
+        t0 = self.clock.now()
+        while True:
+            now = self.clock.now()
+            with self._state:
+                moving = self.lease is not None or now < self.busy_until
+                why = ("stopped" if self.latched else "agent gone" if not self.connected
+                       else "idle" if not moving else "max_s" if now - t0 >= m - 1e-9 else None)
+            if why or self.sleep is None:
+                break
+            self.sleep(min(0.05, max(0.0, m - (now - t0))))
+        return self._status_result("reins_wait", "wait", waited_s=round(self.clock.now() - t0, 3), moving=moving,
+                                   ended_by=why or "clock does not run")
 
     def _renew(self, args) -> dict:
         if not isinstance(args, dict) or set(args) != {"lease_id", "extend_s"}:

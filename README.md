@@ -42,7 +42,8 @@ python3 -m unittest discover -s tests -t tests         # about 80 tests, about 1
   whose `issued_at` is too old is refused, and so is a repeated `request_id`.
 - **The agent's picture stays true.** Motion calls return at once. When a new motion stops a running one early, the
   answer says which one and how far it got (`replaced`), so the agent never reports a move as finished when it was
-  cut short.
+  cut short. `reins_wait` lets the agent wait for a move to end; a stop ends the wait at once and is never queued
+  behind it.
 - **Owner-only controls.** Confirming an action, lifting a stop and changing the policy happen on the owner's
   local channel (`python3 -m reins owner ...`). The agent has no tool for any of them.
 - **Stop.** `reins_stop` and the owner's stop skip every check and every queue. After a stop, motion stays

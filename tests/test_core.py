@@ -9,7 +9,8 @@ from reins.policy import PolicyError, load_policy
 class RoverEnforcement(unittest.TestCase):
     def test_tools_are_policy_actions_plus_reins(self):
         names = {t["name"] for t in RoverRig().reins.list_tools()}
-        self.assertEqual(names, {"drive", "set_led", "reins_stop", "reins_status", "reins_policy", "reins_renew"})
+        self.assertEqual(names, {"drive", "set_led", "reins_stop", "reins_status", "reins_policy", "reins_renew",
+                                 "reins_wait"})
 
     def test_lease_runs_keepalives_then_stops(self):
         r = RoverRig(watchdog_s=0.5)
@@ -82,6 +83,48 @@ class RoverEnforcement(unittest.TestCase):
         res = r.call("drive", {"linear_mps": 0.3, "duration_s": 1.0})
         self.assertEqual(res["rule"], "busy")
         self.assertIn("2.00 s left", res["reason"])
+
+    def test_wait_returns_when_the_motion_ends(self):
+        r = RoverRig()
+        r.reins.sleep = r.run                           # simulated time passes while the agent waits
+        self.assertEqual(r.call("reins_wait")["ended_by"], "idle")          # nothing running: back at once
+        r.call("drive", {"linear_mps": 0.3, "duration_s": 2.0})
+        r.run(0.5)
+        w = r.call("reins_wait")
+        self.assertEqual((w["ended_by"], w["moving"]), ("idle", False))
+        self.assertAlmostEqual(w["waited_s"], 1.5, delta=0.1)
+        self.assertIsNone(w["reins"]["lease"])
+        nxt = r.call("drive", {"linear_mps": 0.0, "angular_rps": 1.0, "duration_s": 1.0})
+        self.assertNotIn("replaced", nxt)                                   # the first move ran in full
+        self.assertEqual(r.reins.audit.events("lease_end")[0]["ran_s"], 2.0)
+
+    def test_wait_ends_at_a_stop_and_at_max_s(self):
+        r = RoverRig()
+        r.call("drive", {"linear_mps": 0.3, "duration_s": 4.0})
+
+        def sleep(dt):
+            r.run(dt)
+            if r.clock.now() - r.reins.audit.events("decision")[0]["t"] >= 0.8 and not r.reins.latched:
+                r.reins.owner_stop()
+        r.reins.sleep = sleep
+        w = r.call("reins_wait")
+        self.assertEqual(w["ended_by"], "stopped")
+        self.assertTrue(w["reins"]["stopped"])
+        self.assertLess(w["waited_s"], 1.0)
+        r.reins.owner_resume()
+        r.reins.sleep = r.run
+        r.call("drive", {"linear_mps": 0.3, "duration_s": 4.0})
+        w = r.call("reins_wait", {"max_s": 1.0})
+        self.assertEqual((w["ended_by"], w["moving"]), ("max_s", True))
+        self.assertAlmostEqual(w["waited_s"], 1.0, delta=0.06)
+        for bad in ({"max_s": -1}, {"max_s": 99}, {"max_s": "1"}, {"max_s": float("nan")}, {"x": 1}):
+            self.assertEqual(r.call("reins_wait", bad)["rule"], "bad_params")
+
+    def test_wait_without_real_time_returns_at_once(self):
+        r = RoverRig()                                  # virtual clock and no sleep: never hangs
+        r.call("drive", {"linear_mps": 0.3, "duration_s": 2.0})
+        w = r.call("reins_wait")
+        self.assertEqual((w["ended_by"], w["waited_s"], w["moving"]), ("clock does not run", 0.0, True))
 
     def test_newer_motion_cancels_a_waiting_request(self):
         r = RoverRig()

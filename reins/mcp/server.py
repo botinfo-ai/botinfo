@@ -17,8 +17,10 @@ PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 class StdioServer:
     def __init__(self, list_tools, call_tool, name="reins", instructions="", on_disconnect=None, tick=None,
-                 tick_s=0.05, inp=None, out=None, log=None):
-        """call_tool(name, args) -> (payload_dict, is_error)."""
+                 tick_s=0.05, inp=None, out=None, log=None, slow_tools=()):
+        """call_tool(name, args) -> (payload_dict, is_error). A tool in slow_tools (one that waits) runs on its own
+        thread and answers when done, so the requests after it, a stop above all, are not queued behind it."""
+        self.slow_tools = frozenset(slow_tools)
         self.list_tools, self.call_tool = list_tools, call_tool
         self.name, self.instructions = name, instructions
         self.on_disconnect, self.tick, self.tick_s = on_disconnect, tick, tick_s
@@ -89,17 +91,36 @@ class StdioServer:
                 res = {"tools": self.list_tools()}
             elif method == "tools/call":
                 name, args = params.get("name"), params.get("arguments") or {}
-                payload, is_error = self.call_tool(name, args)
-                text = json.dumps(payload, separators=(",", ":"), default=str)
-                res = {"content": [{"type": "text", "text": text}], "isError": bool(is_error)}
-                if isinstance(payload, dict):
-                    res["structuredContent"] = payload
+                if name in self.slow_tools:
+                    threading.Thread(target=self._slow_call, args=(mid, name, args), name=f"{self.name}-{name}",
+                                     daemon=True).start()
+                    return None
+                res = self._tool_result(name, args)
             else:
                 return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"method not found: {method}"}}
         except Exception as e:
             self.log(f"[{self.name}] error handling {method}: {e!r}")
             return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32603, "message": "internal error"}}
         return {"jsonrpc": "2.0", "id": mid, "result": _finite(res)}
+
+    def _tool_result(self, name, args) -> dict:
+        payload, is_error = self.call_tool(name, args)
+        text = json.dumps(payload, separators=(",", ":"), default=str)
+        res = {"content": [{"type": "text", "text": text}], "isError": bool(is_error)}
+        if isinstance(payload, dict):
+            res["structuredContent"] = payload
+        return res
+
+    def _slow_call(self, mid, name, args):
+        try:
+            reply = {"jsonrpc": "2.0", "id": mid, "result": _finite(self._tool_result(name, args))}
+        except Exception as e:
+            self.log(f"[{self.name}] error in {name}: {e!r}")
+            reply = {"jsonrpc": "2.0", "id": mid, "error": {"code": -32603, "message": "internal error"}}
+        try:
+            self._send(reply)
+        except (OSError, ValueError):   # the client went away while we waited
+            pass
 
 
 def _finite(obj):

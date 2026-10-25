@@ -73,7 +73,10 @@ Out of scope for v0 (stated, not solved):
   a small 2D mobile-robot simulator with a connector shaped like ros-mcp-server's generic tools.
 
 Tools Reins shows the agent: one per policy action, plus `reins_stop` (always), `reins_status`,
-`reins_policy`, and `reins_renew` when leases are renewable. Calls return at once; motion runs on a lease.
+`reins_policy`, `reins_renew` when leases are renewable, and `reins_wait` when the policy has motions. Action calls
+return at once; motion runs on a lease. `reins_wait` is the one call that blocks: it returns when the running motion's
+lease ends, a stop lands, the agent goes away or its `max_s` passes, and it holds no lock while it waits. The MCP
+server answers it on its own thread, so a `reins_stop` sent meanwhile is answered at once, never queued behind it.
 
 ## 3. Stop semantics
 

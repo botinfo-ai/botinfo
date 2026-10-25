@@ -156,6 +156,39 @@ class McpServer(unittest.TestCase):
         self.assertEqual(events[-1]["event"], "stop")
         self.assertEqual(events[-1]["reason"], "the agent disconnected")
 
+    def test_slow_tool_never_delays_a_stop(self):
+        """reins_wait answers on its own thread: a reins_stop sent while the agent waits is answered at once, and
+        it ends the wait."""
+        from reins.mcp.client import StdioMCPClient
+        d = Path(tempfile.mkdtemp(prefix="reins-"))
+        err = open(d / "stderr.log", "w")
+        self.addCleanup(err.close)
+        c = StdioMCPClient(["{python}", "-m", "reins", "serve", "--policy", str(ROOT / "policies/simrover.toml"),
+                            "--binding", str(ROOT / "bindings/simrover-ros-style.toml"), "--audit",
+                            str(d / "audit.jsonl"), "--socket", str(d / "o.sock")], timeout_s=20, cwd=str(ROOT),
+                           stderr=err)
+        try:
+            self.assertIn("reins_wait", {t["name"] for t in c.tools})
+            self.assertEqual(c.call_tool("drive", {"linear_mps": 0.3, "duration_s": 0.6})["decision"], "allowed")
+            t0 = time.monotonic()
+            w = c.call_tool("reins_wait", {})
+            self.assertEqual(w["ended_by"], "idle")
+            self.assertGreater(time.monotonic() - t0, 0.4)
+            self.assertIsNone(w["reins"]["lease"])                         # the stop at the lease end is sent
+            c.call_tool("drive", {"linear_mps": 0.3, "duration_s": 4.0})
+            box = {}
+            th = threading.Thread(target=lambda: box.update(w=c.call_tool("reins_wait", {})))
+            th.start()
+            time.sleep(0.5)
+            t1 = time.monotonic()
+            self.assertTrue(c.call_tool("reins_stop", {})["delivered"])
+            self.assertLess(time.monotonic() - t1, 0.3)                     # not queued behind the wait
+            th.join(timeout=2.0)
+            self.assertEqual(box["w"]["ended_by"], "stopped")
+            self.assertLess(box["w"]["waited_s"], 1.0)
+        finally:
+            c.close()
+
 
 if __name__ == "__main__":
     unittest.main()
