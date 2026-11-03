@@ -1,28 +1,51 @@
 # BotInfo
 
-> Formerly named Reins (renamed 2026-10-25). Same code and the same results; the package, the command
-> (`python3 -m botinfo`) and the agent's tools (`botinfo_stop`, `botinfo_status`, `botinfo_wait`, ...) carry the new
-> name. Old links to github.com/botinfo-ai/reins redirect here.
+**When an AI agent is driving a robot, can you stop it mid-move?** The **BotInfo Benchmark** tests that and more:
+hostile test cases that grade any robot connector, raw or behind BotInfo, on what the robot actually did, never on
+what the connector replied.
 
-BotInfo is an open-source policy layer that sits between an AI agent and a robot its owner has connected. It sits in
-front of the robot's existing connector. The agent sees only the actions the owner allows, each with checked
-bounds. Every motion runs on a lease and stops by itself. A stop always wins, and every request and decision
-goes to an audit log.
+## What the benchmark found (v0.1)
 
-The repo also contains the **BotInfo Benchmark**: hostile test cases that grade any connector, raw or
-behind BotInfo, on what the robot actually did.
+We graded two open-source connectors that let an AI agent drive a robot, as real code on real ROS 2 in local
+containers, against a simulator and a stand-in robot (not hardware):
+
+- **On their own, a stop sent during a move waited for the move to end in both.** With ros-mcp-server v3.1.2, the
+  simulated turtle stopped about 3.9 s after the stop; with unitree-go2-mcp-server, the stand-in Go2 that centres its
+  sticks stopped 4.2 s after it (4.9 s on the one that holds the last input).
+- **Behind BotInfo, ros-mcp-server went from 11 to 100** (critical cases 1/10 to 10/10), and the turtle was still
+  within 0.07 s of each stop. Its lost-link pass is turtlesim's own 1 s stop, not BotInfo's.
+- **unitree-go2-mcp-server went from 18 to 68** (stand-in Go2 that centres the sticks 0.5 s after the last message),
+  but its stop still waited for the running move: the server handles one call at a time, so no stop sent through it
+  can interrupt a running move, behind BotInfo or not. A second stand-in that holds the last input voids both rows.
+
+BotInfo and this benchmark were written by the same team, so BotInfo passing its own authors' tests proves little;
+the benchmark is worth something once other people add cases that BotInfo fails. Every case, every failure and
+why: [results/LEADERBOARD.md](results/LEADERBOARD.md).
 
 > **Status, v0.1 (2026-10-16): simulation and mocks only.** Nothing here has run on a real robot. The
 > benchmark results are not a certification and say nothing about real hardware. Nobody outside BotInfo has
 > reviewed this yet.
 
-## Quickstart (one command)
+BotInfo itself is an open-source policy layer that sits between an AI agent and a robot its owner has connected. It
+sits in front of the robot's existing connector. The agent sees only the actions the owner allows, each with checked
+bounds. Every motion runs on a lease and stops by itself. A stop always wins, and every request and decision
+goes to an audit log.
 
-From this folder, with Python 3.11 or newer and nothing to install (on an older Python, BotInfo says so in one line
-and stops; macOS's built-in `python3` is 3.9, so use one from python.org or `uv`):
+## Quickstart
+
+Python 3.11 or newer, nothing else to install:
 
 ```bash
+git clone https://github.com/botinfo-ai/botinfo.git
+cd botinfo
 python3 -m botinfo bench
+```
+
+macOS's built-in `python3` is 3.9, too old (BotInfo says so in one line and stops). With
+[uv](https://docs.astral.sh/uv/), one command fetches a newer Python for this run:
+
+```bash
+uv run --no-project --python 3.12 python -m botinfo bench
 ```
 
 It runs 20 cases against 8 stacks in simulated time (about a second) and writes `results/scorecard.json` and
@@ -283,6 +306,12 @@ results/                   the published v0.1 benchmark run
 integrations/openclaw/     OpenClaw skill stub (unverified)
 tests/                     unittest suite
 ```
+
+## Formerly Reins
+
+Renamed 2026-10-25. Same code and the same results; the package, the command (`python3 -m botinfo`) and the agent's
+tools (`botinfo_stop`, `botinfo_status`, `botinfo_wait`, ...) carry the new name. Old links to
+github.com/botinfo-ai/reins redirect here.
 
 ## License and credits
 
