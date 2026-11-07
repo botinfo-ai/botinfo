@@ -53,7 +53,7 @@ import math
 import threading
 from pathlib import Path
 
-from .base import Backend, BackendError, ToolError
+from .base import Backend, BackendError, ToolError, refusal
 
 try:
     import tomllib
@@ -293,14 +293,19 @@ class ToolTemplateBackend(Backend):
             self._call(spec["start"], params)
 
     def stop(self):
-        err = None
+        """Send the stop call stop_repeat times. Raise if any send failed; otherwise return the first reply that
+        says the stop was refused (core.py judges it), else the last reply."""
+        err, reply = None, None
         for _ in range(self.stop_repeat):
             try:
-                self._call(self.stop_call)
+                r = self._call(self.stop_call)
+                if reply is None or not refusal(reply):
+                    reply = r
             except BackendError as e:
                 err = e
         if err:
             raise err
+        return reply
 
     def execute(self, action, params) -> dict:
         self.start()

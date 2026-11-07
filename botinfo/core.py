@@ -35,7 +35,7 @@ import time
 from collections import OrderedDict, defaultdict, deque
 
 from .audit import AuditLog
-from .backends.base import BackendError, sanitize
+from .backends.base import BackendError, refusal, sanitize
 from .clock import RealClock
 from .policy import PolicyError, check_params, needs_confirmation, split_meta
 
@@ -271,7 +271,7 @@ class BotInfo:
             self.pending.clear()
         with self._io:
             try:
-                self.backend.stop()
+                self._send_stop()
                 delivered, err = True, None
             except BackendError as e:
                 delivered, err = False, str(e)
@@ -283,6 +283,14 @@ class BotInfo:
         if err:
             out["error"] = err
         return out
+
+    def _send_stop(self):
+        """backend.stop(), with a refusal the backend RETURNS turned into the BackendError it means. A connector that
+        answers a stop with {"ok": false} or {"status": "error"} did not stop the robot, so the stop is logged as not
+        delivered and, at a lease end or a replace, reaches _backend_failed and the latch."""
+        why = refusal(self.backend.stop())
+        if why:
+            raise BackendError(f"stop refused: {why}")
 
     # ================================================================== stop receipts
     def _open_receipt(self, by: str) -> str:
@@ -402,7 +410,7 @@ class BotInfo:
                     self.next_ws_check = now + ws.check_every_s
             if todo == "end":
                 try:
-                    self.backend.stop()
+                    self._send_stop()
                     sid = self._open_receipt("lease_end")
                     self.audit.write("lease_end", lease_id=lease["id"], action=lease["action"], stop_sent=True,
                                      keepalives=lease["keepalives"], ran_s=round(now - lease["start"], 3),
@@ -473,7 +481,7 @@ class BotInfo:
                         t = self.clock.now()
                         cut = ({"lease_id": old["id"], "action": old["action"], "ran_s": round(t - old["start"], 3),
                                 "of_s": round(old["end"] - old["start"], 3)} if old else {"action": self.busy_action})
-                    self.backend.stop()
+                    self._send_stop()
                     self.audit.write("replaced", old=old["id"] if old else self.busy_action, by=name,
                                      **{k: v for k, v in cut.items() if k.endswith("_s")})
                 if self._stopped_since(gen):         # a stop latched while we waited (e.g. for the replace stop)

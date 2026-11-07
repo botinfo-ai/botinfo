@@ -6,7 +6,8 @@ A backend executes ALREADY-CHECKED actions. It never decides what is allowed; co
   - status() -> a dict of typed fields, described by status_schema() so BotInfo can redact anything else;
   - optionally pose() and predict_path() for the workspace check;
   - optionally settle_spec(), naming the status fields that read the robot's speed, for stop receipts.
-Errors reaching the robot raise BackendError.
+Errors reaching the robot raise BackendError. stop() may instead return the connector's reply: a reply that says the
+stop failed (refusal() below) counts as not delivered, exactly like a raised BackendError.
 """
 from __future__ import annotations
 
@@ -62,7 +63,8 @@ class Backend:
     def keepalive(self, action, params) -> None:
         pass
 
-    def stop(self) -> None:
+    def stop(self):
+        """Stop now. Return None, or the connector's reply so core.py can tell a refusal from a stop."""
         raise NotImplementedError
 
     # one-shot and instant
@@ -99,6 +101,40 @@ class Backend:
 
     def close(self) -> None:
         pass
+
+
+FAILED_FLAGS = ("ok", "success", "successful", "delivered")     # False here = the call failed
+ERROR_FLAGS = ("isError", "error")                               # truthy here = the call failed
+FAILED_STATUS = {"error", "failed", "failure", "refused", "rejected"}
+
+
+def refusal(reply) -> str | None:
+    """Why a reply that came back WITHOUT an exception still says the call failed, or None.
+
+    Public robot connectors report failure as data in several shapes: False, {"ok": false},
+    {"success": false}, {"isError": true}, {"status": "error", "message": ...}, a truthy "error". None, True and
+    any other reply read as carried out; text a connector does not structure cannot be judged here."""
+    if reply is False:
+        return "the backend reported the call failed"
+    if not isinstance(reply, dict):
+        return None
+    for k in FAILED_FLAGS:
+        if reply.get(k) is False:
+            return f"{k} is false" + _detail(reply)
+    for k in ERROR_FLAGS:
+        if reply.get(k):
+            return f"{k}: {str(reply[k])[:200]}" if isinstance(reply[k], str) else f"{k} is set" + _detail(reply)
+    st = reply.get("status")
+    if isinstance(st, str) and st.strip().lower() in FAILED_STATUS:
+        return f"status is {st.strip().lower()!r}" + _detail(reply)
+    return None
+
+
+def _detail(reply: dict) -> str:
+    for k in ("message", "reason", "error", "detail"):
+        if isinstance(reply.get(k), str) and reply[k]:
+            return f" ({reply[k][:200]})"
+    return ""
 
 
 def sanitize(values: dict, schema: dict) -> tuple:
