@@ -17,6 +17,13 @@ channel from a third. Two locks: _state (fast, never held during robot I/O) and 
 stop is always the LAST thing sent, after any keep-alive already on the wire). Lock order: _io, then _state.
 A stop sets the latch under _state first, so no new motion can start while it waits for _io.
 
+Stop receipts: a stop that was sent is not a robot at rest. When the binding says which status fields read the
+robot's speed ([settle]), tick() reads the robot's status after every stop and every lease end until those speeds
+stay under a threshold, then logs one "stop_receipt" audit event: when the robot came to rest, or that it did not
+within the timeout, or that its status could not be read. Nothing is read on the stop path itself.
+A receipt is only as good as those fields: odometry that echoes the commanded speed (open-loop) or a status that
+stopped updating can read zero while the body still moves, so "at_rest" means the robot REPORTED rest.
+
 In the benchmark everything runs on one thread with a VirtualClock.
 """
 from __future__ import annotations
@@ -33,6 +40,7 @@ from .clock import RealClock
 from .policy import PolicyError, check_params, needs_confirmation, split_meta
 
 MAX_SEEN_IDS = 10000
+MAX_READ_ERRORS = 3                         # a stop receipt gives up after this many failed status reads in a row
 STOP_NOTE = ("This is a software stop sent over a network link. If the robot did not stop, use its local "
              "stop (power switch or hardware e-stop).")
 
@@ -67,8 +75,13 @@ class BotInfo:
         self.next_ws_check = -math.inf
         self.connected = True
         self._ids = itertools.count(1)
+        settle = getattr(backend, "settle_spec", None)
+        self.settle = settle() if callable(settle) else None
+        self.watch: dict | None = None          # the stop receipt being measured
+        self.last_stop: dict | None = None
+        self._stop_ids = itertools.count(1)
         self.audit.write("start", policy=policy.name, policy_file=policy.source, backend=backend.describe(),
-                         actions=sorted(policy.actions))
+                         actions=sorted(policy.actions), stop_receipts=self.settle is not None)
 
     # ================================================================== agent-facing tools
     def list_tools(self) -> list:
@@ -104,7 +117,8 @@ class BotInfo:
                       "inputSchema": {"type": "object", "properties": {"reason": {"type": "string"}}},
                       "annotations": {"readOnlyHint": False, "destructiveHint": False}})
         tools.append({"name": "botinfo_status", "description": "BotInfo state (stopped?, running lease, pending "
-                      "confirmations) and the robot's status fields.",
+                      "confirmations, last_stop) and the robot's status fields. last_stop.rest says whether the "
+                      "robot's own speed readings fell to rest after the latest stop, when its speed can be read.",
                       "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True}})
         if any(a.kind in ("motion", "oneshot") for a in self.policy.actions.values()):
             tools.append({"name": "botinfo_wait", "description": "Wait until the running motion ends, or at most max_s "
@@ -261,13 +275,109 @@ class BotInfo:
                 delivered, err = True, None
             except BackendError as e:
                 delivered, err = False, str(e)
+        sid = self._open_receipt(by)
         self.audit.write("stop", by=by, reason=reason, delivered=delivered, error=err, latched=self.latched,
-                         cancelled_lease=lease["id"] if lease else None, cancelled_pending=cancelled)
+                         cancelled_lease=lease["id"] if lease else None, cancelled_pending=cancelled, stop_id=sid)
         out = {"ok": delivered, "decision": "stopped", "delivered": delivered, "latched": self.latched,
-               "note": STOP_NOTE}
+               "stop_id": sid, "note": STOP_NOTE}
         if err:
             out["error"] = err
         return out
+
+    # ================================================================== stop receipts
+    def _open_receipt(self, by: str) -> str:
+        """Number this stop and, when the binding says how to read the robot's speed, start watching for the robot
+        to come to rest. tick() does the reading, so the stop itself is never slowed by it. A receipt still open
+        from an earlier stop is closed as superseded."""
+        sid = f"s-{next(self._stop_ids)}"
+        now = self.clock.now()
+        with self._state:
+            old, self.watch = self.watch, None
+            if self.settle is not None:
+                self.watch = {"id": sid, "by": by, "t0": now, "next": now, "reads": 0, "errors": 0,
+                              "errors_in_row": 0, "first": None, "last": None, "still_since": None, "peak": {}}
+            self.last_stop = {"id": sid, "by": by, "rest": "watching" if self.watch else "not_measured"}
+        if old is not None:
+            self._close_receipt(old, "superseded", now, note=f"a newer stop ({sid}) was sent")
+        return sid
+
+    def _end_receipt(self, note: str):
+        with self._state:
+            w, self.watch = self.watch, None
+        if w is not None:
+            self._close_receipt(w, "superseded", self.clock.now(), note=note)
+
+    def _watch_tick(self):
+        """One status read for the open stop receipt; tick() calls it with _io held. The robot counts as at rest
+        once every [settle] field has read under `below` for hold_s. The receipt closes then, after timeout_s, or
+        after MAX_READ_ERRORS failed reads in a row. A failed read here never triggers on_backend_error."""
+        spec = self.settle
+        now = self.clock.now()
+        with self._state:
+            w = self.watch
+            if w is None or now < w["next"] - 1e-9:
+                return
+            w["next"] = now + spec["every_s"]
+        try:
+            raw, err = self.backend.status(), None
+        except BackendError as e:
+            raw, err = {}, str(e)
+        clean, red = sanitize(raw, self.backend.status_schema())
+        for r in red:
+            self.audit.write("output_redacted", **r)
+        speeds = [clean.get(f) for f in spec["fields"]]
+        good = err is None and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in speeds)
+        outcome = None
+        with self._state:
+            if self.watch is not w:                 # a newer stop or a new motion took over during the read
+                return
+            w["reads"] += 1
+            if good:
+                w["errors_in_row"] = 0
+                snap = {"after_stop_s": round(now - w["t0"], 3), **clean}
+                if w["first"] is None:
+                    w["first"] = snap
+                w["last"] = snap
+                for f, v in zip(spec["fields"], speeds):
+                    w["peak"][f] = max(w["peak"].get(f, 0.0), abs(v))
+                if all(abs(v) < spec["below"] for v in speeds):
+                    if w["still_since"] is None:
+                        w["still_since"] = now
+                    if now - w["still_since"] >= spec["hold_s"] - 1e-9:
+                        outcome = "at_rest"
+                else:
+                    w["still_since"] = None
+            else:
+                w["errors"] += 1
+                w["errors_in_row"] += 1
+                w["still_since"] = None
+                w["last_error"] = err or "a speed field was missing or not a number"
+                if w["errors_in_row"] >= MAX_READ_ERRORS:
+                    outcome = "unreadable"
+            if outcome is None and now - w["t0"] >= spec["timeout_s"] - 1e-9:
+                outcome = "not_at_rest" if w["first"] is not None else "unreadable"
+            if outcome:
+                self.watch = None
+        if outcome:
+            self._close_receipt(w, outcome, now)
+
+    def _close_receipt(self, w: dict, outcome: str, now: float, note: str = ""):
+        rec = {"stop_id": w["id"], "by": w["by"], "outcome": outcome, "watched_s": round(now - w["t0"], 3),
+               "reads": w["reads"], "read_errors": w["errors"],
+               "peak_after_stop": {f: round(v, 4) for f, v in w["peak"].items()},
+               "first_read": w["first"], "last_read": w["last"]}
+        if outcome == "at_rest":
+            rec["at_rest_after_s"] = round(w["still_since"] - w["t0"], 3)
+        rec.update(_moved(w["first"], w["last"], self.settle.get("pose")))
+        if w.get("last_error"):
+            rec["last_error"] = w["last_error"][:200]
+        if note:
+            rec["note"] = note
+        with self._state:
+            if self.last_stop is not None and self.last_stop["id"] == w["id"]:
+                self.last_stop = {"id": w["id"], "by": w["by"], "rest": outcome,
+                                  **({"at_rest_after_s": rec["at_rest_after_s"]} if outcome == "at_rest" else {})}
+        self.audit.write("stop_receipt", **rec)
 
     # ================================================================== time
     def tick(self):
@@ -293,8 +403,10 @@ class BotInfo:
             if todo == "end":
                 try:
                     self.backend.stop()
+                    sid = self._open_receipt("lease_end")
                     self.audit.write("lease_end", lease_id=lease["id"], action=lease["action"], stop_sent=True,
-                                     keepalives=lease["keepalives"], ran_s=round(now - lease["start"], 3))
+                                     keepalives=lease["keepalives"], ran_s=round(now - lease["start"], 3),
+                                     stop_id=sid)
                 except BackendError as e:
                     self.audit.write("lease_end", lease_id=lease["id"], action=lease["action"], stop_sent=False,
                                      error=str(e))
@@ -312,6 +424,8 @@ class BotInfo:
                     self._backend_failed(e, "pose read")
                 if pose is not None and not _inside(pose[:2], ws, margin=0.0):
                     self.stop(by="botinfo", reason=f"left the workspace at x={pose[0]:.2f} y={pose[1]:.2f}")
+            if self.settle is not None:
+                self._watch_tick()
             try:
                 self.backend.tick()
             except BackendError as e:
@@ -364,6 +478,8 @@ class BotInfo:
                                      **{k: v for k, v in cut.items() if k.endswith("_s")})
                 if self._stopped_since(gen):         # a stop latched while we waited (e.g. for the replace stop)
                     return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"), cut)
+                if action.kind in ("motion", "oneshot"):
+                    self._end_receipt(f"{name} started a new motion")
                 if action.kind == "motion":
                     self.backend.start_motion(action, params)
                     with self._state:
@@ -479,7 +595,8 @@ class BotInfo:
                     "pending": [{"id": p["id"], "action": p["action"], "why": p["why"],
                                  "expires_in_s": round(max(0.0, p["expires"] - now), 3),
                                  **({"params": p["params"]} if include_pending_params else {})}
-                                for p in self.pending.values()]}
+                                for p in self.pending.values()],
+                    "last_stop": None if self.last_stop is None else dict(self.last_stop)}
 
     def _status_result(self, tool: str = "botinfo_status", rule: str = "status", **extra) -> dict:
         robot, err = {}, None
@@ -543,6 +660,21 @@ class BotInfo:
             ends_in = lease["end"] - now
         self.audit.write("decision", tool="botinfo_renew", decision="allowed", lease_id=lid, ends_in_s=round(ends_in, 3))
         return {"ok": True, "decision": "renewed", "lease_id": lid, "ends_in_s": round(ends_in, 3)}
+
+
+def _moved(first, last, pose) -> dict:
+    """How far the robot went between the first and the last status read of a stop receipt, when the binding names
+    pose fields. The first read comes after the stop was sent, so this is a lower bound on the travel after it."""
+    if not pose or not first or not last:
+        return {}
+    try:
+        x0, y0, h0 = (float(first[pose[k]]) for k in ("x", "y", "heading"))
+        x1, y1, h1 = (float(last[pose[k]]) for k in ("x", "y", "heading"))
+    except (KeyError, TypeError, ValueError):
+        return {}
+    turn = (h1 - h0 + math.pi) % (2 * math.pi) - math.pi
+    return {"moved_m_after_first_read": round(math.hypot(x1 - x0, y1 - y0), 4),
+            "turned_rad_after_first_read": round(abs(turn), 4)}
 
 
 def _inner(ws):

@@ -31,3 +31,12 @@ fields.angular_rps = { path = "msg.twist.twist.angular.z", type = "number" }
 x = "x"
 y = "y"
 heading = "heading_rad"
+
+# Stop receipts: after every stop and lease end, read /odom until both speeds stay under 0.01 for 0.2 s (or 3 s
+# pass), then log one "stop_receipt" audit event saying when the rover came to rest, or that it did not.
+[settle]
+fields = ["linear_mps", "angular_rps"]
+below = 0.01
+hold_s = 0.2
+timeout_s = 3.0
+every_s = 0.1

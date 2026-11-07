@@ -38,6 +38,13 @@ the topic, the message type or any other field. "$$" at the start of a string st
     x = "x"
     y = "y"
     heading = "heading_rad"
+
+    [settle]                                    # optional: stop receipts (see core.py)
+    fields = ["linear_mps", "angular_rps"]      # [status].fields of type number that read the robot's speed
+    below = 0.01                                # at rest when every |speed| is under this ...
+    hold_s = 0.2                                # ... on every read for this long
+    timeout_s = 3.0                             # otherwise the receipt says "not_at_rest" after this long
+    every_s = 0.1                               # how often to read [status] while watching
 """
 from __future__ import annotations
 
@@ -54,6 +61,8 @@ except ImportError:  # Python < 3.11
     tomllib = None
 
 FIELD_TYPES = ("number", "boolean", "enum", "token", "yaw_from_quaternion")
+SETTLE_NUMBERS = {"below": (0.01, 0.0, 1000.0), "hold_s": (0.2, 0.0, 10.0), "timeout_s": (3.0, 0.1, 60.0),
+                  "every_s": (0.1, 0.01, 5.0)}          # key: (default, lowest, highest)
 
 
 class BindingError(ValueError):
@@ -172,9 +181,33 @@ class ToolTemplateBackend(Backend):
         self.pose_map = binding.get("pose")
         if self.pose_map and not all(self.pose_map.get(k) in self.status_fields for k in ("x", "y", "heading")):
             raise BindingError("[pose]: x, y and heading must name [status].fields")
+        self.settle = self._settle(binding.get("settle"))
         self._started = False
         self._sent_errors: list = []
         self._sent_lock = threading.Lock()
+
+    def _settle(self, s):
+        if s is None:
+            return None
+        if not isinstance(s, dict):
+            raise BindingError("[settle]: expected a table")
+        extra = set(s) - {"fields"} - set(SETTLE_NUMBERS)
+        if extra:
+            raise BindingError(f"[settle]: unknown key(s) {sorted(extra)}")
+        fields = s.get("fields")
+        if not isinstance(fields, list) or not fields or \
+                any(not isinstance(f, str) or self.status_fields.get(f, {}).get("type") != "number" for f in fields):
+            raise BindingError("[settle].fields: a list of [status].fields of type number that read the robot's speed")
+        spec = {"fields": list(fields)}
+        for key, (default, lo, hi) in SETTLE_NUMBERS.items():
+            v = s.get(key, default)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
+                raise BindingError(f"[settle].{key}: a number from {lo:g} to {hi:g}")
+            spec[key] = float(v)
+        if spec["below"] <= 0:
+            raise BindingError("[settle].below: must be above 0")
+        spec["pose"] = dict(self.pose_map) if self.pose_map else None
+        return spec
 
     # -------------------------------------------------------------- plumbing
     def _call(self, spec, params=None, on_sent=None) -> dict:
@@ -298,6 +331,9 @@ class ToolTemplateBackend(Backend):
             sch[name] = {"type": t, **({"values": tuple(f.get("values", ()))} if t == "enum" else {}),
                          **({"max_len": int(f.get("max_len", 32))} if t == "token" else {})}
         return sch
+
+    def settle_spec(self):
+        return None if self.settle is None else dict(self.settle)
 
     def pose(self):
         if not self.pose_map:

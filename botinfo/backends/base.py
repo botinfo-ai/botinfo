@@ -4,7 +4,8 @@ A backend executes ALREADY-CHECKED actions. It never decides what is allowed; co
   - start_motion / keepalive / stop for kind="motion" actions (stop must work at any time, from any thread);
   - execute for kind="oneshot" and kind="instant" actions;
   - status() -> a dict of typed fields, described by status_schema() so BotInfo can redact anything else;
-  - optionally pose() and predict_path() for the workspace check.
+  - optionally pose() and predict_path() for the workspace check;
+  - optionally settle_spec(), naming the status fields that read the robot's speed, for stop receipts.
 Errors reaching the robot raise BackendError.
 """
 from __future__ import annotations
@@ -77,6 +78,13 @@ class Backend:
 
     def status_schema(self) -> dict:
         return {}
+
+    def settle_spec(self):
+        """How BotInfo tells that the robot came to rest after a stop, or None (no stop receipts):
+        {"fields": [number fields of status() that read the robot's speed], "below": at rest when every |value|
+        is under this, "hold_s": for this long, "timeout_s": give up after this, "every_s": read this often,
+        "pose": {"x": field, "y": field, "heading": field} or None}."""
+        return None
 
     def pose(self):
         """(x, y, heading_rad) or None."""
