@@ -53,7 +53,7 @@ It runs 20 cases against 8 stacks in simulated time (about a second) and writes 
 
 ```bash
 python3 -m botinfo demo                                  # a short scripted session, printed
-python3 -m unittest discover -s tests -t tests         # about 80 tests, about 10 s
+python3 -m unittest discover -s tests -t tests         # over 100 tests, about 10 s
 ```
 
 ## What BotInfo enforces
@@ -70,7 +70,9 @@ python3 -m unittest discover -s tests -t tests         # about 80 tests, about 1
 - **The agent's picture stays true.** Motion calls return at once. When a new motion stops a running one early, the
   answer says which one and how far it got (`replaced`), so the agent never reports a move as finished when it was
   cut short. `botinfo_wait` lets the agent wait for a move to end; a stop ends the wait at once and is never queued
-  behind it.
+  behind it. A stop that cuts a move answers with `stopped_motion`, and `botinfo_status` and `botinfo_wait` carry
+  `last_motion`: the leased move BotInfo ended (or tried to end) last, its lease time (`ran_s` of `of_s`, from
+  accepting the call to sending the stop) and what ended it, so the agent can report the run time BotInfo logged.
 - **Owner-only controls.** Confirming an action, lifting a stop and changing the policy happen on the owner's
   local channel (`python3 -m botinfo owner ...`). The agent has no tool for any of them.
 - **Stop.** `botinfo_stop` and the owner's stop skip every check and every queue. After a stop, motion stays

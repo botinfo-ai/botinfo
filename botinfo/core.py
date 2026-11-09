@@ -24,6 +24,16 @@ within the timeout, or that its status could not be read. Nothing is read on the
 A receipt is only as good as those fields: odometry that echoes the commanded speed (open-loop) or a status that
 stopped updating can read zero while the body still moves, so "at_rest" means the robot REPORTED rest.
 
+Last motion: every stop that cuts a lease, every lease end and every replace of a leased motion records which
+motion BotInfo ended (or tried to end), its lease time (ran_s: from accepting the call to sending the stop, of of_s
+planned; BotInfo's clock, not the robot's motion time) and what ended it, in last_motion (botinfo_status and
+botinfo_wait). The "stop" and "lease_end" audit lines carry ran_s and of_s; a replace whose stop was sent writes a
+"replaced" line with them, and how the new motion's start went is in last_motion and its "decision" line. A stop
+that cuts a lease also returns the record as stopped_motion. A stop that did not reach the robot (the motion may
+still be running), or a replacing motion that was never sent, failed to start or was cut by a stop as it started,
+says so in "ended". One-shot actions have no lease and are not recorded. An agent told "stopped" then reads the
+time BotInfo logged instead of subtracting two timestamps.
+
 In the benchmark everything runs on one thread with a VirtualClock.
 """
 from __future__ import annotations
@@ -79,6 +89,7 @@ class BotInfo:
         self.settle = settle() if callable(settle) else None
         self.watch: dict | None = None          # the stop receipt being measured
         self.last_stop: dict | None = None
+        self.last_motion: dict | None = None    # the latest leased motion BotInfo ended: which lease, lease time, why
         self._stop_ids = itertools.count(1)
         self.audit.write("start", policy=policy.name, policy_file=policy.source, backend=backend.describe(),
                          actions=sorted(policy.actions), stop_receipts=self.settle is not None)
@@ -117,15 +128,22 @@ class BotInfo:
                       "inputSchema": {"type": "object", "properties": {"reason": {"type": "string"}}},
                       "annotations": {"readOnlyHint": False, "destructiveHint": False}})
         tools.append({"name": "botinfo_status", "description": "BotInfo state (stopped?, running lease, pending "
-                      "confirmations, last_stop) and the robot's status fields. last_stop.rest says whether the "
-                      "robot's own speed readings fell to rest after the latest stop, when its speed can be read.",
+                      "confirmations, last_stop, last_motion) and the robot's status fields. last_stop.rest says "
+                      "whether the robot's own speed readings fell to rest after the latest stop, when its speed can "
+                      "be read. last_motion is the leased motion BotInfo ended (or tried to end) last: its lease "
+                      "time (ran_s of of_s seconds, from accepting the call to sending the stop, by BotInfo's clock) "
+                      "and what ended it. If its 'ended' says the stop was not delivered, the motion may still be "
+                      "running. One-shot actions are not recorded there.",
                       "inputSchema": {"type": "object", "properties": {}}, "annotations": {"readOnlyHint": True}})
         if any(a.kind in ("motion", "oneshot") for a in self.policy.actions.values()):
             tools.append({"name": "botinfo_wait", "description": "Wait until the running motion ends, or at most max_s "
                           f"seconds (default {self.policy.max_lease_s:g}), then return the same state as botinfo_status. "
                           "It returns once BotInfo has sent the stop at the end of the motion (the robot may still be "
-                          "slowing down). Use it between moves so each one finishes. A stop (yours or the owner's) "
-                          "ends the wait at once, and botinfo_stop is never delayed by it.",
+                          "slowing down, and last_stop.rest may still say watching). When a leased motion ended, "
+                          "last_motion gives its lease time (ran_s of of_s, by BotInfo's clock) and what ended it. "
+                          "Use it between moves so each one "
+                          "finishes. A stop (yours or the owner's) ends the wait at once, and botinfo_stop is never "
+                          "delayed by it.",
                           "inputSchema": {"type": "object", "properties": {"max_s": {
                               "type": "number", "minimum": 0, "maximum": self.policy.max_lease_s}},
                               "additionalProperties": False},
@@ -265,8 +283,11 @@ class BotInfo:
                 self.latched = True
                 self.latch_reason = f"stop by {by}" + (f": {reason}" if reason else "")
             lease, self.lease = self.lease, None
+            motion = None
             if lease is not None:
-                self.last_motion_end = self.clock.now()
+                now = self.clock.now()
+                self.last_motion_end = now
+                motion = self.last_motion = _motion(lease, now, f"stop by {by}")
             cancelled = sorted(self.pending)
             self.pending.clear()
         with self._io:
@@ -276,10 +297,18 @@ class BotInfo:
             except BackendError as e:
                 delivered, err = False, str(e)
         sid = self._open_receipt(by)
+        if motion is not None:
+            with self._state:
+                motion["stop_id"] = sid
+                if not delivered:
+                    motion["ended"] += ", stop not delivered"
         self.audit.write("stop", by=by, reason=reason, delivered=delivered, error=err, latched=self.latched,
-                         cancelled_lease=lease["id"] if lease else None, cancelled_pending=cancelled, stop_id=sid)
+                         cancelled_lease=lease["id"] if lease else None, cancelled_pending=cancelled, stop_id=sid,
+                         **({"ran_s": motion["ran_s"], "of_s": motion["of_s"]} if motion else {}))
         out = {"ok": delivered, "decision": "stopped", "delivered": delivered, "latched": self.latched,
                "stop_id": sid, "note": STOP_NOTE}
+        if motion is not None:
+            out["stopped_motion"] = dict(motion)
         if err:
             out["error"] = err
         return out
@@ -396,11 +425,12 @@ class BotInfo:
                 for cid in [c for c, p in self.pending.items() if now > p["expires"]]:
                     p = self.pending.pop(cid)
                     self.audit.write("pending_expired", confirmation_id=cid, action=p["action"])
-                lease, todo = self.lease, None
+                lease, todo, ended = self.lease, None, None
                 if lease is not None:
                     if now >= lease["end"] - 1e-9:
                         self.lease, todo = None, "end"
                         self.last_motion_end = now
+                        ended = self.last_motion = _motion(lease, now, "lease_end")
                     elif now >= lease["next_ka"] - 1e-9:
                         lease["next_ka"] = now + self.policy.keepalive_s
                         lease["keepalives"] += 1
@@ -412,12 +442,16 @@ class BotInfo:
                 try:
                     self._send_stop()
                     sid = self._open_receipt("lease_end")
+                    with self._state:
+                        ended["stop_id"] = sid
                     self.audit.write("lease_end", lease_id=lease["id"], action=lease["action"], stop_sent=True,
-                                     keepalives=lease["keepalives"], ran_s=round(now - lease["start"], 3),
+                                     keepalives=lease["keepalives"], ran_s=ended["ran_s"], of_s=ended["of_s"],
                                      stop_id=sid)
                 except BackendError as e:
+                    with self._state:
+                        ended["ended"] = "lease_end, stop not delivered"
                     self.audit.write("lease_end", lease_id=lease["id"], action=lease["action"], stop_sent=False,
-                                     error=str(e))
+                                     ran_s=ended["ran_s"], of_s=ended["of_s"], error=str(e))
                     self._backend_failed(e, "stop at lease end")
             elif todo == "keepalive":
                 try:
@@ -459,6 +493,7 @@ class BotInfo:
                     left = (self.lease["end"] if self.lease is not None else self.busy_until) - now
                     return self._deny(name, "busy", f"another motion is running ({max(0.0, left):.2f} s left); "
                                       "stop it first or wait")
+            replaced, stop_failed = None, False      # the last_motion record of a leased motion this call replaces
             try:
                 if action.kind == "motion":
                     duration = self.backend.motion_duration(action, params)
@@ -481,10 +516,18 @@ class BotInfo:
                         t = self.clock.now()
                         cut = ({"lease_id": old["id"], "action": old["action"], "ran_s": round(t - old["start"], 3),
                                 "of_s": round(old["end"] - old["start"], 3)} if old else {"action": self.busy_action})
-                    self._send_stop()
+                        if old:
+                            replaced = self.last_motion = {**cut, "ended": f"stopping for {name}"}
+                    try:
+                        self._send_stop()
+                    except BackendError:
+                        stop_failed = True
+                        self._mark(replaced, f"stop for {name} not delivered; {name} was not sent")
+                        raise
                     self.audit.write("replaced", old=old["id"] if old else self.busy_action, by=name,
                                      **{k: v for k, v in cut.items() if k.endswith("_s")})
                 if self._stopped_since(gen):         # a stop latched while we waited (e.g. for the replace stop)
+                    self._mark(replaced, f"stopped for {name}; a stop arrived before {name} was sent")
                     return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"), cut)
                 if action.kind in ("motion", "oneshot"):
                     self._end_receipt(f"{name} started a new motion")
@@ -500,9 +543,11 @@ class BotInfo:
                             self.lease = {"id": lid, "action": name, "params": params, "start": now,
                                           "end": now + duration, "next_ka": now + self.policy.keepalive_s,
                                           "keepalives": 0}
-                    if not started:
+                    if not started:                  # the start was sent; the stop that landed meanwhile goes after it
+                        self._mark(replaced, f"replaced by {name}, which a stop cut as it started")
                         return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"),
                                           cut)
+                    self._mark(replaced, f"replaced by {name}")
                     self.audit.write("decision", tool=name, decision="allowed", origin=origin, params=params,
                                      lease_id=lid, runs_for_s=round(duration, 3))
                     return self._said({"ok": True, "decision": "allowed", "lease_id": lid,
@@ -512,13 +557,23 @@ class BotInfo:
                     with self._state:
                         self.busy_until = now + self.backend.oneshot_duration(action, params)
                         self.busy_action = name
+                self._mark(replaced, f"replaced by {name}")
                 self.audit.write("decision", tool=name, decision="allowed", origin=origin, params=params)
                 return self._said({"ok": True, "decision": "allowed", "result": result,
                                    **({"uninterruptible": True} if action.uninterruptible else {})}, cut)
             except BackendError as e:
+                if not stop_failed:                  # a connector can fail after the command went out
+                    self._mark(replaced, f"stopped for {name}; starting {name} failed ({str(e)[:120]}), and the "
+                                         "command may have reached the robot")
                 self.audit.write("decision", tool=name, decision="failed", origin=origin, error=str(e))
                 self._backend_failed(e, f"{name}")
                 return {"ok": False, "decision": "failed", "rule": "backend_error", "reason": str(e)}
+
+    def _mark(self, replaced, ended: str):
+        """Say in a replaced motion's last_motion record how the replace turned out."""
+        if replaced is not None:
+            with self._state:
+                replaced["ended"] = ended
 
     @staticmethod
     def _said(out: dict, cut) -> dict:
@@ -604,7 +659,8 @@ class BotInfo:
                                  "expires_in_s": round(max(0.0, p["expires"] - now), 3),
                                  **({"params": p["params"]} if include_pending_params else {})}
                                 for p in self.pending.values()],
-                    "last_stop": None if self.last_stop is None else dict(self.last_stop)}
+                    "last_stop": None if self.last_stop is None else dict(self.last_stop),
+                    "last_motion": None if self.last_motion is None else dict(self.last_motion)}
 
     def _status_result(self, tool: str = "botinfo_status", rule: str = "status", **extra) -> dict:
         robot, err = {}, None
@@ -668,6 +724,13 @@ class BotInfo:
             ends_in = lease["end"] - now
         self.audit.write("decision", tool="botinfo_renew", decision="allowed", lease_id=lid, ends_in_s=round(ends_in, 3))
         return {"ok": True, "decision": "renewed", "lease_id": lid, "ends_in_s": round(ends_in, 3)}
+
+
+def _motion(lease: dict, now: float, ended: str) -> dict:
+    """The record of a motion BotInfo just ended: which lease, its lease time so far (accepted to stop sent) of the
+    time planned, and why."""
+    return {"lease_id": lease["id"], "action": lease["action"], "ran_s": round(now - lease["start"], 3),
+            "of_s": round(lease["end"] - lease["start"], 3), "ended": ended}
 
 
 def _moved(first, last, pose) -> dict:

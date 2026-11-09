@@ -78,6 +78,17 @@ return at once; motion runs on a lease. `botinfo_wait` is the one call that bloc
 lease ends, a stop lands, the agent goes away or its `max_s` passes, and it holds no lock while it waits. The MCP
 server answers it on its own thread, so a `botinfo_stop` sent meanwhile is answered at once, never queued behind it.
 
+When BotInfo ends a leased motion (a stop cuts it, its lease ends, or a new motion replaces it), it records which
+lease it was, its lease time (`ran_s`, of `of_s` planned: from accepting the call to sending the stop, by BotInfo's
+clock, not the robot's own motion time) and what ended it, as `last_motion` in the answers of `botinfo_status` and
+`botinfo_wait`. The `stop` and `lease_end` audit lines carry `ran_s` and `of_s`; a replace whose stop was sent writes
+a `replaced` line with them, and how the new motion's start went is in `last_motion` and its `decision` line. A stop
+that cuts a motion also returns the record as `stopped_motion`. `ended` says when the stop did not reach the robot
+(the motion may still be running), and when the replacing motion was never sent, failed to start (the command may
+still have reached the robot) or was cut by a stop as it started. One-shot actions have no lease and are not
+recorded. An agent told "stopped" can then report the time BotInfo logged instead of working it out from two
+timestamps.
+
 ## 3. Stop semantics
 
 1. `botinfo_stop` (agent) and `stop` on the owner channel take the same path: set the latch, cancel every lease and
