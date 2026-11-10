@@ -1,0 +1,49 @@
+# Map policies/g1sim.toml onto the simulated G1 (botinfo/backends/g1sim.py), whose tools are named after Unitree's
+# G1 LocoClient. BotInfo's stop is StopMove: velocity zero, with the walking policy still running and balancing.
+# In github.com/botinfo-ai/humanoid-stop-sim that was the only stop that kept a walking G1 upright; damping and zero
+# torque put a knee on the floor and left it not upright (see bindings/g1sim-loco-damp.toml). Simulation only.
+#
+# Needs numpy, mujoco and a clone of github.com/unitreerobotics/unitree_rl_gym (checked at commit 3e70454):
+# set unitree_rl_gym below, or BOTINFO_UNITREE_RL_GYM.
+
+[binding]
+kind = "mcp-tools"
+label = "G1 sim (MuJoCo + Unitree's published walking policy), LocoClient-style tools"
+connector = "g1sim-loco"
+# unitree_rl_gym = "~/unitree_rl_gym"
+viewer = false               # true: open MuJoCo's viewer (needs a display; on macOS run under mjpython)
+error_keys = ["error"]
+
+[stop]
+call = { tool = "StopMove", args = {} }
+repeat = 2
+
+[actions.walk]
+start = { tool = "Move", args = { vx = "$forward_mps", vy = 0.0, vyaw = "$turn_rps" } }
+keepalive = "start"
+path = { model = "unicycle", linear = "$forward_mps", angular = "$turn_rps", duration = "$duration_s" }
+
+[status]
+call = { tool = "GetState", args = {} }
+fields.x = { path = "x", type = "number" }
+fields.y = { path = "y", type = "number" }
+fields.heading_rad = { path = "yaw", type = "number" }
+fields.speed_mps = { path = "speed_mps", type = "number" }
+fields.travel_mps = { path = "travel_mps", type = "number" }
+fields.pelvis_z_m = { path = "z", type = "number" }
+fields.upright = { path = "upright", type = "boolean" }
+fields.mode = { path = "mode", type = "enum", values = ["walking", "damping", "zero_torque"] }
+
+[pose]
+x = "x"
+y = "y"
+heading = "heading_rad"
+
+# Stop receipts. Under this policy the pelvis keeps moving at velocity zero (docs/G1SIM.md), so "at rest" is read
+# from net travel: how far the pelvis moved over the last second, per second.
+[settle]
+fields = ["travel_mps"]
+below = 0.05
+hold_s = 0.5
+timeout_s = 5.0
+every_s = 0.1

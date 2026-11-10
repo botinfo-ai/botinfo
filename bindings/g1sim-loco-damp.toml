@@ -1,0 +1,45 @@
+# The same as bindings/g1sim-loco.toml except BotInfo's stop: here it is Damp (walking policy off, kp 0 and kd 8 on
+# every joint, unitree_rl_gym's create_damping_cmd). Run it to see what a damping stop does to a walking G1 in this
+# simulation; compare GetState's upright and pelvis_z_m after a stop with the StopMove binding. Simulation only.
+# BotInfo also sends its stop when a walk's lease ends, so with this binding every walk ends in Damp. After a Damp,
+# this sim refuses Move until it is restarted.
+
+[binding]
+kind = "mcp-tools"
+label = "G1 sim (MuJoCo + Unitree's published walking policy), LocoClient-style tools, stop = Damp"
+connector = "g1sim-loco"
+# unitree_rl_gym = "~/unitree_rl_gym"
+viewer = false
+error_keys = ["error"]
+
+[stop]
+call = { tool = "Damp", args = {} }
+repeat = 1
+
+[actions.walk]
+start = { tool = "Move", args = { vx = "$forward_mps", vy = 0.0, vyaw = "$turn_rps" } }
+keepalive = "start"
+path = { model = "unicycle", linear = "$forward_mps", angular = "$turn_rps", duration = "$duration_s" }
+
+[status]
+call = { tool = "GetState", args = {} }
+fields.x = { path = "x", type = "number" }
+fields.y = { path = "y", type = "number" }
+fields.heading_rad = { path = "yaw", type = "number" }
+fields.speed_mps = { path = "speed_mps", type = "number" }
+fields.travel_mps = { path = "travel_mps", type = "number" }
+fields.pelvis_z_m = { path = "z", type = "number" }
+fields.upright = { path = "upright", type = "boolean" }
+fields.mode = { path = "mode", type = "enum", values = ["walking", "damping", "zero_torque"] }
+
+[pose]
+x = "x"
+y = "y"
+heading = "heading_rad"
+
+[settle]
+fields = ["travel_mps"]
+below = 0.05
+hold_s = 0.5
+timeout_s = 5.0
+every_s = 0.1

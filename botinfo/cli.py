@@ -68,6 +68,13 @@ def build_backend(binding_path, clock):
         conn = b["binding"].get("connector")
         if conn == "simrover-ros-style":
             caller = InProcessSim(clock, float(b["binding"].get("watchdog_s", 0.0)))
+        elif conn == "g1sim-loco":
+            from .backends.g1sim import G1LocoConnector, G1Sim, find_unitree_rl_gym
+            sim = G1Sim(clock, find_unitree_rl_gym(b["binding"].get("unitree_rl_gym")),
+                        viewer=bool(b["binding"].get("viewer", False)))
+            if sim.viewer_error:
+                print(f"botinfo: no viewer ({sim.viewer_error}); the G1 sim runs without one", file=sys.stderr)
+            caller = G1LocoConnector(sim)
         elif conn:
             raise PolicyError(f"unknown in-process connector {conn!r}")
         elif b["binding"].get("command"):
