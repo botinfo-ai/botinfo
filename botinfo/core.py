@@ -31,8 +31,11 @@ botinfo_wait). The "stop" and "lease_end" audit lines carry ran_s and of_s; a re
 "replaced" line with them, and how the new motion's start went is in last_motion and its "decision" line. A stop
 that cuts a lease also returns the record as stopped_motion. A stop that did not reach the robot (the motion may
 still be running), or a replacing motion that was never sent, failed to start or was cut by a stop as it started,
-says so in "ended". One-shot actions have no lease and are not recorded. An agent told "stopped" then reads the
-time BotInfo logged instead of subtracting two timestamps.
+says so in "ended"; for a replacing motion cut as it started, "ended" also says whether a stop sent after its start
+was delivered. When the connector reports that an action or a stop failed, its error text goes into the audit log
+and into the answer of the call that sent it, if any ("reason" of an action, "error" of a stop), never into
+last_motion, which every later status and wait returns. One-shot actions have no lease and are not recorded. An
+agent told "stopped" then reads the time BotInfo logged instead of subtracting two timestamps.
 
 In the benchmark everything runs on one thread with a VirtualClock.
 """
@@ -90,6 +93,7 @@ class BotInfo:
         self.watch: dict | None = None          # the stop receipt being measured
         self.last_stop: dict | None = None
         self.last_motion: dict | None = None    # the latest leased motion BotInfo ended: which lease, lease time, why
+        self._starting: dict | None = None      # a motion being sent right now, so a stop landing meanwhile is told
         self._stop_ids = itertools.count(1)
         self.audit.write("start", policy=policy.name, policy_file=policy.source, backend=backend.describe(),
                          actions=sorted(policy.actions), stop_receipts=self.settle is not None)
@@ -288,14 +292,20 @@ class BotInfo:
                 now = self.clock.now()
                 self.last_motion_end = now
                 motion = self.last_motion = _motion(lease, now, f"stop by {by}")
+            starting = self._starting
             cancelled = sorted(self.pending)
             self.pending.clear()
-        with self._io:
-            try:
-                self._send_stop()
-                delivered, err = True, None
-            except BackendError as e:
-                delivered, err = False, str(e)
+        delivered, err = False, None
+        try:
+            with self._io:
+                try:
+                    self._send_stop()
+                    delivered = True
+                except BackendError as e:
+                    err = str(e)
+        finally:                                # even if the connector raised something else
+            if starting is not None:            # a motion was being sent as this stop landed; this stop went after it
+                self._stop_after_start(starting, delivered)
         sid = self._open_receipt(by)
         if motion is not None:
             with self._state:
@@ -320,6 +330,16 @@ class BotInfo:
         why = refusal(self.backend.stop())
         if why:
             raise BackendError(f"stop refused: {why}")
+
+    def _stop_after_start(self, starting: dict, delivered: bool):
+        """Note how a stop that landed while a motion was being sent went. Its start went out first and this stop
+        after it. Once any such stop was delivered, the record says so, whatever a later stop did. If _execute has
+        already returned, rewrite the replaced motion's "ended" now."""
+        with self._state:
+            delivered = starting["stop_delivered"] = bool(starting.get("stop_delivered")) or delivered
+            cut_seen = starting.get("cut", False)
+        if cut_seen:
+            self._mark(starting["replaced"], _cut_by_stop(starting["action"], delivered))
 
     # ================================================================== stop receipts
     def _open_receipt(self, by: str) -> str:
@@ -526,16 +546,33 @@ class BotInfo:
                         raise
                     self.audit.write("replaced", old=old["id"] if old else self.busy_action, by=name,
                                      **{k: v for k, v in cut.items() if k.endswith("_s")})
-                if self._stopped_since(gen):         # a stop latched while we waited (e.g. for the replace stop)
+                with self._state:
+                    # a stop sets stop_gen under _state at once, even while it waits for _io (held here). Did one
+                    # land while we waited (e.g. for the replace stop)? Checked in the same step that registers the
+                    # motion being sent, so a stop landing after this check knows about it
+                    stopped = self.stop_gen != gen
+                    starting = None
+                    if not stopped and action.kind == "motion":
+                        starting = self._starting = {"action": name, "replaced": replaced}
+                if stopped:
                     self._mark(replaced, f"stopped for {name}; a stop arrived before {name} was sent")
                     return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"), cut)
                 if action.kind in ("motion", "oneshot"):
-                    self._end_receipt(f"{name} started a new motion")
+                    try:
+                        self._end_receipt(f"{name} started a new motion")
+                        if action.kind == "motion":
+                            self.backend.start_motion(action, params)
+                    except BaseException:
+                        with self._state:
+                            self._starting = None    # still None for a one-shot
+                        raise
                 if action.kind == "motion":
-                    self.backend.start_motion(action, params)
                     with self._state:
+                        self._starting = None
                         if self.stop_gen != gen:
                             started = False
+                            starting["cut"] = True
+                            stop_delivered = starting.get("stop_delivered")   # None: that stop is sent after this
                         else:
                             started = True
                             lid = f"l-{next(self._ids)}"
@@ -544,7 +581,7 @@ class BotInfo:
                                           "end": now + duration, "next_ka": now + self.policy.keepalive_s,
                                           "keepalives": 0}
                     if not started:                  # the start was sent; the stop that landed meanwhile goes after it
-                        self._mark(replaced, f"replaced by {name}, which a stop cut as it started")
+                        self._mark(replaced, _cut_by_stop(name, stop_delivered))
                         return self._said(self._deny(name, "stopped", "a stop arrived while the motion was starting"),
                                           cut)
                     self._mark(replaced, f"replaced by {name}")
@@ -563,8 +600,9 @@ class BotInfo:
                                    **({"uninterruptible": True} if action.uninterruptible else {})}, cut)
             except BackendError as e:
                 if not stop_failed:                  # a connector can fail after the command went out
-                    self._mark(replaced, f"stopped for {name}; starting {name} failed ({str(e)[:120]}), and the "
-                                         "command may have reached the robot")
+                    # the connector's error text stays out of last_motion; it goes to the audit log and this answer
+                    self._mark(replaced, f"stopped for {name}; starting {name} failed (the connector's error is in "
+                                         "the audit log), and the command may have reached the robot")
                 self.audit.write("decision", tool=name, decision="failed", origin=origin, error=str(e))
                 self._backend_failed(e, f"{name}")
                 return {"ok": False, "decision": "failed", "rule": "backend_error", "reason": str(e)}
@@ -585,13 +623,6 @@ class BotInfo:
                            f"{cut['ran_s']:g} of {cut['of_s']:g} s." if "lease_id" in cut else
                            f"This stopped the previous {cut['action']} early.")
         return out
-
-    def _stopped_since(self, gen) -> bool:
-        """A stop sets stop_gen under _state at once, even while it waits for _io (held by this request). Checking
-        it right before anything is sent keeps a request that was already past the latch check, and then waited
-        (for a slow connector to finish the motion being replaced), from starting a motion after the stop."""
-        with self._state:
-            return self.stop_gen != gen
 
     def _workspace_problem(self, action, params) -> str | None:
         ws = self.policy.workspace
@@ -731,6 +762,19 @@ def _motion(lease: dict, now: float, ended: str) -> dict:
     time planned, and why."""
     return {"lease_id": lease["id"], "action": lease["action"], "ran_s": round(now - lease["start"], 3),
             "of_s": round(lease["end"] - lease["start"], 3), "ended": ended}
+
+
+def _cut_by_stop(name: str, delivered) -> str:
+    """How a replace ended when a stop landed while its new motion was being sent: that motion's start command went
+    out first and the stop after it. delivered says whether any stop sent after it was delivered (a stop that raised
+    counts as not delivered); it is None while that stop still waits to be sent, and the stop rewrites the text once
+    it knows."""
+    if delivered is None:
+        return f"replaced by {name}; a stop arrived as {name} started and is being sent after it"
+    if delivered:
+        return f"replaced by {name}, which a stop cut as it started"
+    return (f"replaced by {name}; the stop that arrived as {name} started was not delivered, so {name} may still be "
+            "running")
 
 
 def _moved(first, last, pose) -> dict:

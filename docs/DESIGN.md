@@ -85,9 +85,14 @@ clock, not the robot's own motion time) and what ended it, as `last_motion` in t
 a `replaced` line with them, and how the new motion's start went is in `last_motion` and its `decision` line. A stop
 that cuts a motion also returns the record as `stopped_motion`. `ended` says when the stop did not reach the robot
 (the motion may still be running), and when the replacing motion was never sent, failed to start (the command may
-still have reached the robot) or was cut by a stop as it started. One-shot actions have no lease and are not
-recorded. An agent told "stopped" can then report the time BotInfo logged instead of working it out from two
-timestamps.
+still have reached the robot) or was cut by a stop as it started; in that last case it also says whether a stop
+sent after the new motion's start was delivered (if none was, the new motion may still be running). A new motion
+that was cut as it started and replaced no leased motion gets no record of its own: `last_motion` keeps what it
+held before, and the stop's own answer says whether that stop was delivered. When the connector reports that an
+action or a stop failed, its error text goes into the audit log and into the answer of the call that sent it, if any (the `reason`
+of an action, the `error` of a stop), never into `last_motion`, which every later `botinfo_status` and `botinfo_wait` returns.
+One-shot actions have no lease and are not recorded. An agent told "stopped" can then report the time BotInfo logged instead of working it
+out from two timestamps.
 
 ## 3. Stop semantics
 
